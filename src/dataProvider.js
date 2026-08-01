@@ -6,6 +6,8 @@ const httpClient = (url, options = {}) =>
   {
     const headers = new Headers(options.headers)
     headers.set('Accept', 'application/json')
+    const token = localStorage.getItem('admin_token')
+    if (token) headers.set('Authorization', `Bearer ${token}`)
     return fetchUtils.fetchJson(url, { ...options, headers }).catch((error) => {
       throw new HttpError(error.body?.error || error.message || 'Server communication error', error.status, error.body)
     })
