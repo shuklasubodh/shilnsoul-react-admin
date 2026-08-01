@@ -1,6 +1,5 @@
 import { neon } from '@neondatabase/serverless'
 import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -72,47 +71,11 @@ export default async function handler(request, response) {
 
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL
   if (!connectionString) return json(response, 500, { error: 'DATABASE_URL is not configured for this deployment.' })
-  const jwtSecret = process.env.ADMIN_JWT_SECRET
-  if (!jwtSecret) return json(response, 500, { error: 'ADMIN_JWT_SECRET is not configured for this deployment.' })
-
   const route = String(request.query.route || '').replace(/^\/+|\/+$/g, '')
   const [resourceName, id, ...extra] = route.split('/')
   const sql = neon(connectionString)
 
   try {
-    if (resourceName === 'auth' && id === 'login' && !extra.length && request.method === 'POST') {
-      const { email, password } = request.body || {}
-      if (!email || !password) return json(response, 400, { error: 'Email and password are required.' })
-      const rows = await sql.query(
-        `SELECT id, first_name, last_name, email, password_hash, role, is_active FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
-        [String(email).trim()],
-      )
-      const user = rows[0]
-      const active = user && ['true', '1', 'y'].includes(String(user.is_active).toLowerCase())
-      const admin = user && String(user.role).toUpperCase() === 'ADMIN'
-      const passwordMatches = user?.password_hash && await bcrypt.compare(String(password), user.password_hash)
-      if (!user || !active || !admin || !passwordMatches) {
-        return json(response, 401, { error: 'Invalid credentials or administrator access is not permitted.' })
-      }
-      const identity = {
-        id: String(user.id),
-        fullName: `${user.first_name} ${user.last_name}`.trim(),
-        email: user.email,
-        role: 'ADMIN',
-      }
-      const token = jwt.sign(identity, jwtSecret, { expiresIn: '8h', issuer: 'shilpnsoul-admin' })
-      return json(response, 200, { token, user: identity })
-    }
-
-    const authorization = request.headers.authorization || ''
-    const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-    try {
-      const session = jwt.verify(token, jwtSecret, { issuer: 'shilpnsoul-admin' })
-      if (session.role !== 'ADMIN') return json(response, 403, { error: 'Administrator access is required.' })
-    } catch {
-      return json(response, 401, { error: 'Authentication is required.' })
-    }
-
     const resource = resources[resourceName]
     if (!resource || extra.length || (id && !positiveId(id))) return json(response, 404, { error: 'API route not found.' })
 
