@@ -66,9 +66,17 @@ export default async function handler(request, response) {
   if (!resource || extra.length || (id && !positiveId(id))) return json(response, 404, { error: 'API route not found.' })
 
   const sql = neon(connectionString)
-  const selectColumns = resource.publicColumns.map((column) => `"${column}"`).join(', ')
 
   try {
+    const schemaColumns = await sql.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 ORDER BY ordinal_position`,
+      [resource.table],
+    )
+    if (!schemaColumns.length) return json(response, 404, { error: `Database table "${resource.table}" does not exist.` })
+    const availableColumns = schemaColumns.map(({ column_name }) => column_name)
+    const readableColumns = availableColumns.filter((column) => column !== 'password_hash')
+    const selectColumns = readableColumns.map((column) => `"${column}"`).join(', ')
+
     if (request.method === 'GET' && id) {
       const rows = await sql.query(`SELECT ${selectColumns} FROM "${resource.table}" WHERE id = $1`, [id])
       if (!rows.length) return json(response, 404, { error: 'Record not found.' })
@@ -81,18 +89,21 @@ export default async function handler(request, response) {
       const range = parseJson(request.query.range, [request.query._start || 0, (request.query._end || 10) - 1])
       const start = Math.max(0, Number(range[0]) || 0)
       const end = Math.max(start, Number(range[1]) || start + 9)
-      const sortField = resource.publicColumns.includes(sort[0]) ? sort[0] : 'id'
+      const sortField = readableColumns.includes(sort[0]) ? sort[0] : (readableColumns.includes('id') ? 'id' : readableColumns[0])
       const sortOrder = String(sort[1]).toUpperCase() === 'DESC' ? 'DESC' : 'ASC'
       const clauses = []
       const values = []
       const q = filter.q ?? request.query._q
 
       if (q) {
-        values.push(`%${q}%`)
-        clauses.push(`(${resource.searchColumns.map((column) => `CAST("${column}" AS TEXT) ILIKE $${values.length}`).join(' OR ')})`)
+        const searchableColumns = resource.searchColumns.filter((column) => readableColumns.includes(column))
+        if (searchableColumns.length) {
+          values.push(`%${q}%`)
+          clauses.push(`(${searchableColumns.map((column) => `CAST("${column}" AS TEXT) ILIKE $${values.length}`).join(' OR ')})`)
+        }
       }
       for (const [key, value] of Object.entries(filter)) {
-        if (key === 'q' || !resource.publicColumns.includes(key) || value === '' || value == null) continue
+        if (key === 'q' || !readableColumns.includes(key) || value === '' || value == null) continue
         if (Array.isArray(value)) {
           values.push(value)
           clauses.push(`"${key}" = ANY($${values.length})`)
@@ -115,7 +126,7 @@ export default async function handler(request, response) {
 
     if (request.method === 'POST' && !id) {
       const body = request.body || {}
-      const columns = resource.columns.filter((column) => body[column] !== undefined && body[column] !== '')
+      const columns = resource.columns.filter((column) => availableColumns.includes(column) && body[column] !== undefined && body[column] !== '')
       if (!columns.length) return json(response, 400, { error: 'At least one valid field is required.' })
       const values = columns.map((column) => body[column])
       const placeholders = values.map((_, index) => `$${index + 1}`).join(', ')
@@ -128,12 +139,12 @@ export default async function handler(request, response) {
 
     if (request.method === 'PUT' && id) {
       const body = request.body || {}
-      const columns = resource.columns.filter((column) => body[column] !== undefined && body[column] !== '')
+      const columns = resource.columns.filter((column) => availableColumns.includes(column) && body[column] !== undefined && body[column] !== '')
       if (!columns.length) return json(response, 400, { error: 'At least one valid field is required.' })
       const values = columns.map((column) => body[column])
       values.push(id)
       const assignments = columns.map((column, index) => `"${column}" = $${index + 1}`)
-      if (resource.publicColumns.includes('updated_at')) assignments.push('"updated_at" = NOW()')
+      if (availableColumns.includes('updated_at')) assignments.push('"updated_at" = NOW()')
       const rows = await sql.query(
         `UPDATE "${resource.table}" SET ${assignments.join(', ')} WHERE id = $${values.length} RETURNING ${selectColumns}`,
         values,
