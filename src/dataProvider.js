@@ -2,12 +2,12 @@ import simpleRestProvider from 'ra-data-simple-rest'
 import { fetchUtils } from 'react-admin'
 
 
-export const API_URL = (
-  import.meta.env.VITE_API_URL ||
-  'https://shilpnsoul-backend.vercel.app/api'
-).replace(/\/$/, '')
+// export const API_URL = (
+//   import.meta.env.VITE_API_URL ||
+//   'https://shilpnsoul-backend.vercel.app/api'
+// ).replace(/\/$/, '')
 
-// export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/$/, '')
+export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/$/, '')
 // This will use the production backend
 
 const httpClient = (url, options = {}) =>
