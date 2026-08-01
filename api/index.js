@@ -137,6 +137,11 @@ export default async function handler(request, response) {
 
     if (request.method === 'POST' && !id) {
       const body = request.body || {}
+      if (resourceName === 'users') {
+        const requiredFields = ['first_name', 'last_name', 'email', 'password_hash', 'phone', 'role', 'is_active']
+        const missingFields = requiredFields.filter((field) => body[field] === undefined || body[field] === '')
+        if (missingFields.length) return json(response, 400, { error: `Missing required fields: ${missingFields.join(', ')}.` })
+      }
       const columns = resource.columns.filter((column) => availableColumns.includes(column) && body[column] !== undefined && body[column] !== '')
       if (!columns.length) return json(response, 400, { error: 'At least one valid field is required.' })
       const values = await prepareValues(resourceName, columns, body)

@@ -9,8 +9,8 @@ const UserList = () => <List filters={[<SearchInput key="search" source="q" alwa
 const UserForm = ({ creating = false }) => <SimpleForm>
   <TextInput source="first_name" validate={required()} /><TextInput source="last_name" validate={required()} />
   <TextInput source="email" type="email" validate={required()} /><TextInput source="phone" validate={required()} />
-  <SelectInput source="role" choices={roles} validate={required()} /><BooleanInput source="is_active" defaultValue />
   <PasswordInput source="password_hash" label={creating ? 'Password' : 'New password (optional)'} validate={creating ? required() : undefined} />
+  <SelectInput source="role" choices={roles} validate={required()} /><BooleanInput source="is_active" defaultValue />
 </SimpleForm>
 const UserShow = () => <Show><SimpleShowLayout>
   <TextField source="id" /><TextField source="first_name" /><TextField source="last_name" /><EmailField source="email" />
