@@ -5,7 +5,7 @@ import {
   SimpleForm, SimpleShowLayout, TextField, TextInput,
 } from 'react-admin'
 
-const statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'].map((id) => ({ id, name: id }))
+const statuses = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((id) => ({ id, name: id }))
 
 const OrderList = () => (
   <List filters={[<SearchInput key="search" source="q" alwaysOn />]} sort={{ field: 'created_at', order: 'DESC' }}>
