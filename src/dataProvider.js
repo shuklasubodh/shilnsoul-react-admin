@@ -1,10 +1,9 @@
 import simpleRestProvider from 'ra-data-simple-rest'
 import { fetchUtils } from 'react-admin'
-const DEFAULT_API_URL = import.meta.env.DEV
-  ? 'http://localhost:3000/api'
-  : 'https://shilnsoul-react-admin.vercel.app/api'
-
-export const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
+export const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  'https://shilpnsoul-backend.vercel.app/api'
+).replace(/\/$/, '')
 
 const httpClient = (url, options = {}) =>
   fetchUtils.fetchJson(url, {
@@ -12,7 +11,7 @@ const httpClient = (url, options = {}) =>
     headers: new Headers({ Accept: 'application/json', ...(options.headers || {}) }),
   })
 
-const restProvider = simpleRestProvider(API_URL, httpClient)
+const restProvider = simpleRestProvider(API_URL, httpClient, 'X-Total-Count')
 const singular = { users: 'user', products: 'product', categories: 'category', orders: 'order' }
 const unwrapRecord = (resource, response) => response?.data?.[singular[resource]] || response?.data
 const normalizeRecord = (resource, record) => resource === 'users' && record
