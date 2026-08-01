@@ -1,4 +1,8 @@
 import { neon } from '@neondatabase/serverless'
+import bcrypt from 'bcrypt'
+
+const BCRYPT_ROUNDS = 12
+const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
 
 const resources = {
   users: {
@@ -33,6 +37,14 @@ const resources = {
 
 const json = (response, status, body) => response.status(status).json(body)
 const positiveId = (value) => /^\d+$/.test(String(value)) && Number(value) > 0
+
+const prepareValues = async (resourceName, columns, body) => Promise.all(
+  columns.map(async (column) => {
+    const value = body[column]
+    if (resourceName !== 'users' || column !== 'password_hash' || bcryptHashPattern.test(String(value))) return value
+    return bcrypt.hash(String(value), BCRYPT_ROUNDS)
+  }),
+)
 
 const parseJson = (value, fallback) => {
   if (!value) return fallback
@@ -128,7 +140,7 @@ export default async function handler(request, response) {
       const body = request.body || {}
       const columns = resource.columns.filter((column) => availableColumns.includes(column) && body[column] !== undefined && body[column] !== '')
       if (!columns.length) return json(response, 400, { error: 'At least one valid field is required.' })
-      const values = columns.map((column) => body[column])
+      const values = await prepareValues(resourceName, columns, body)
       const placeholders = values.map((_, index) => `$${index + 1}`).join(', ')
       const rows = await sql.query(
         `INSERT INTO "${resource.table}" (${columns.map((column) => `"${column}"`).join(', ')}) VALUES (${placeholders}) RETURNING ${selectColumns}`,
@@ -141,7 +153,7 @@ export default async function handler(request, response) {
       const body = request.body || {}
       const columns = resource.columns.filter((column) => availableColumns.includes(column) && body[column] !== undefined && body[column] !== '')
       if (!columns.length) return json(response, 400, { error: 'At least one valid field is required.' })
-      const values = columns.map((column) => body[column])
+      const values = await prepareValues(resourceName, columns, body)
       values.push(id)
       const assignments = columns.map((column, index) => `"${column}" = $${index + 1}`)
       if (availableColumns.includes('updated_at')) assignments.push('"updated_at" = NOW()')
