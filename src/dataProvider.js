@@ -2,7 +2,7 @@ import simpleRestProvider from 'ra-data-simple-rest'
 import { fetchUtils } from 'react-admin'
 export const API_URL = (
   import.meta.env.VITE_API_URL ||
-  'https://shilpnsoul-backend.vercel.app/api'
+  'https://shilnsoul-react-admin.vercel.app/api'
 ).replace(/\/$/, '')
 
 const httpClient = (url, options = {}) =>
