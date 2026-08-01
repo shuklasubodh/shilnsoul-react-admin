@@ -1,12 +1,14 @@
 import simpleRestProvider from 'ra-data-simple-rest'
-import { fetchUtils } from 'react-admin'
+import { fetchUtils, HttpError } from 'react-admin'
 export const API_URL = '/api'
 
 const httpClient = (url, options = {}) =>
   {
     const headers = new Headers(options.headers)
     headers.set('Accept', 'application/json')
-    return fetchUtils.fetchJson(url, { ...options, headers })
+    return fetchUtils.fetchJson(url, { ...options, headers }).catch((error) => {
+      throw new HttpError(error.body?.error || error.message || 'Server communication error', error.status, error.body)
+    })
   }
 
 const restProvider = simpleRestProvider(API_URL, httpClient, 'X-Total-Count')
