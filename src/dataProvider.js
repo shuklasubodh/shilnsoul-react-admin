@@ -1,14 +1,10 @@
 import simpleRestProvider from 'ra-data-simple-rest'
 import { fetchUtils } from 'react-admin'
+const DEFAULT_API_URL = import.meta.env.DEV
+  ? 'http://localhost:3000/api'
+  : 'https://shilnsoul-react-admin.vercel.app/api'
 
-
-// export const API_URL = (
-//   import.meta.env.VITE_API_URL ||
-//   'https://shilpnsoul-backend.vercel.app/api'
-// ).replace(/\/$/, '')
-
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/$/, '')
-// This will use the production backend
+export const API_URL = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '')
 
 const httpClient = (url, options = {}) =>
   fetchUtils.fetchJson(url, {
