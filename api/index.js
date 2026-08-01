@@ -58,7 +58,7 @@ const databaseError = (response, error) => {
   }
   if (error.code === '23505') return json(response, 409, { error: 'A record with that unique value already exists.' })
   if (error.code === '23503') return json(response, 409, { error: 'This record is referenced by another record.' })
-  if (error.code === '23502' || error.code === '22P02') return json(response, 400, { error: 'A required field is missing or invalid.' })
+  if (error.code === '23502' || error.code === '23514' || error.code === '22P02') return json(response, 400, { error: 'A required field is missing or invalid.' })
   return json(response, 500, { error: 'Database request failed.' })
 }
 

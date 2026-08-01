@@ -21,9 +21,7 @@ const normalizeResponse = (resource, response) => ({
     ? response.data.map((record) => normalizeRecord(resource, record))
     : normalizeRecord(resource, response.data),
 })
-const prepareData = (resource, data) => resource === 'users'
-  ? { ...data, is_active: data.is_active ? 'Y' : 'N' }
-  : data
+const prepareData = (_resource, data) => data
 
 export const dataProvider = {
   ...restProvider,

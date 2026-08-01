@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { BooleanField, BooleanInput, Create, Datagrid, DateField, Edit, EditButton, EmailField, List, PasswordInput, required, SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput } from 'react-admin'
 
-const roles = [{ id: 'admin', name: 'Admin' }, { id: 'customer', name: 'Customer' }]
+const roles = [{ id: 'ADMIN', name: 'Admin' }, { id: 'CUSTOMER', name: 'Customer' }]
 const UserList = () => <List filters={[<SearchInput key="search" source="q" alwaysOn />]}><Datagrid rowClick="show">
   <TextField source="id" /><TextField source="first_name" /><TextField source="last_name" /><EmailField source="email" />
   <TextField source="phone" /><TextField source="role" /><BooleanField source="is_active" /><DateField source="created_at" showTime /><EditButton />
