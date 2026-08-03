@@ -7,6 +7,7 @@ import { dataProvider } from './dataProvider'
 import { authProvider } from './authProvider'
 import { AdminLayout } from './AdminLayout'
 import { Dashboard } from './Dashboard'
+import { LoginPage } from './LoginPage'
 import { categoryResource } from './resources/categories'
 import { orderResource } from './resources/orders'
 import { productResource } from './resources/products'
@@ -19,6 +20,7 @@ function App() {
       dashboard={Dashboard}
       dataProvider={dataProvider}
       layout={AdminLayout}
+      loginPage={LoginPage}
       requireAuth
       title="React Admin - Product Management"
       theme={{
