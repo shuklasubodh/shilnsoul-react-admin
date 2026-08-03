@@ -5,6 +5,8 @@ import PeopleIcon from '@mui/icons-material/People'
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart'
 import { dataProvider } from './dataProvider'
 import { authProvider } from './authProvider'
+import { AdminLayout } from './AdminLayout'
+import { Dashboard } from './Dashboard'
 import { categoryResource } from './resources/categories'
 import { orderResource } from './resources/orders'
 import { productResource } from './resources/products'
@@ -12,11 +14,29 @@ import { userResource } from './resources/users'
 
 function App() {
   return (
-    <Admin authProvider={authProvider} dataProvider={dataProvider} requireAuth title="Shilp & Soul Admin">
-      <Resource name="users" icon={PeopleIcon} {...userResource} />
-      <Resource name="products" icon={InventoryIcon} {...productResource} />
+    <Admin
+      authProvider={authProvider}
+      dashboard={Dashboard}
+      dataProvider={dataProvider}
+      layout={AdminLayout}
+      requireAuth
+      title="React Admin - Product Management"
+      theme={{
+        palette: {
+          primary: { main: '#183650' },
+          secondary: { main: '#258781' },
+          background: { default: '#f7f9fb', paper: '#ffffff' },
+          text: { primary: '#243b53', secondary: '#66727f' },
+        },
+        sidebar: { width: 170, closedWidth: 54 },
+        shape: { borderRadius: 2 },
+        typography: { fontFamily: 'Inter, "Segoe UI", Arial, sans-serif' },
+      }}
+    >
+      <Resource name="products" icon={InventoryIcon} {...productResource} recordRepresentation="name" />
       <Resource name="categories" icon={CategoryIcon} {...categoryResource} />
       <Resource name="orders" icon={ShoppingCartIcon} {...orderResource} />
+      <Resource name="users" icon={PeopleIcon} {...userResource} recordRepresentation={(record) => `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.email} />
     </Admin>
   )
 }

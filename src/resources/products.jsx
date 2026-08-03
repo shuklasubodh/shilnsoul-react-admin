@@ -1,18 +1,31 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  BooleanField, BooleanInput, Create, Datagrid, Edit, EditButton, ImageField,
+  BooleanField, BooleanInput, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField, ImageField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
   SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
+  TopToolbar, WrapperField,
 } from 'react-admin'
+import { Box } from '@mui/material'
+import { ScopePanel } from '../Dashboard'
+
+const ProductActions = () => <TopToolbar><CreateButton label="Add product" /></TopToolbar>
 
 const ProductList = () => (
-  <List filters={[<SearchInput key="search" source="q" alwaysOn />]}>
-    <Datagrid rowClick="show">
-      <TextField source="id" /><ImageField source="image_url" /><TextField source="name" />
-      <TextField source="sku" /><ReferenceField source="category_id" reference="categories" />
-      <NumberField source="price" options={{ style: 'currency', currency: 'USD' }} />
-      <NumberField source="stock_quantity" /><BooleanField source="is_active" /><EditButton />
-    </Datagrid>
+  <List
+    actions={<ProductActions />}
+    filters={[<SearchInput key="search" source="q" placeholder="Search / filter by category" alwaysOn />]}
+    sort={{ field: 'id', order: 'ASC' }}
+  >
+    <Box>
+      <Datagrid bulkActionButtons={false} rowClick={false}>
+        <TextField source="sku" label="SKU" /><TextField source="name" /><TextField source="slug" />
+        <NumberField source="price" options={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} />
+        <NumberField source="stock_quantity" label="Stock" />
+        <FunctionField label="Status" render={(record) => record.is_active ? 'Active' : 'Inactive'} />
+        <WrapperField label="Actions"><EditButton label="Edit" /><DeleteButton label="Delete" mutationMode="pessimistic" /></WrapperField>
+      </Datagrid>
+      <ScopePanel />
+    </Box>
   </List>
 )
 

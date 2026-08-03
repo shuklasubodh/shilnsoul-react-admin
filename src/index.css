@@ -1,3 +1,11 @@
+:root {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #243b53;
+  background: #f7f9fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
 html,
 body,
 #root {
@@ -6,5 +14,193 @@ body,
 }
 
 body {
-  font-family: Roboto, Arial, sans-serif;
+  background: #f7f9fb;
+}
+
+.admin-app-bar {
+  background: #183650 !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid #284b69;
+}
+
+.admin-app-bar .RaAppBar-toolbar {
+  min-height: 52px;
+  padding: 0 18px;
+}
+
+.admin-brand {
+  color: #fff;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  white-space: nowrap;
+}
+
+.RaSidebar-fixed,
+.RaSidebar-paper {
+  background: #eaf2f8 !important;
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-menu {
+  padding: 12px 10px !important;
+}
+
+.admin-menu .RaMenuItemLink-root {
+  min-height: 38px;
+  margin: 2px 0;
+  padding: 0 14px;
+  color: #294761;
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.admin-menu .RaMenuItemLink-root:hover {
+  background: #dceaf3;
+}
+
+.admin-menu .RaMenuItemLink-active {
+  color: #fff !important;
+  background: #258781 !important;
+}
+
+.RaLayout-content {
+  padding: 20px 28px 28px !important;
+}
+
+.RaList-main,
+.RaCreate-main,
+.RaEdit-main,
+.RaShow-main {
+  max-width: 100%;
+}
+
+.RaList-actions {
+  min-height: 38px;
+  margin-bottom: 8px;
+}
+
+.RaList-actions .MuiButton-root,
+.RaCreateButton-root {
+  min-height: 32px;
+  padding: 5px 14px;
+  color: #fff !important;
+  background: #258781 !important;
+  border-radius: 6px;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.RaFilterForm-root {
+  width: 100%;
+  margin: 0 0 18px;
+}
+
+.RaFilterForm-root .MuiFormControl-root {
+  width: min(100%, 800px);
+}
+
+.RaFilterForm-root .MuiInputBase-root {
+  min-height: 42px;
+  background: #fff;
+  border-radius: 0;
+}
+
+.RaDatagrid-root {
+  border: 1px solid #d9e2ea;
+  box-shadow: none !important;
+}
+
+.RaDatagrid-root .MuiTableHead-root .MuiTableCell-root {
+  padding: 10px 8px;
+  color: #fff;
+  font-weight: 500;
+  background: #183650;
+  border-bottom-color: #183650;
+}
+
+.RaDatagrid-root .MuiTableBody-root .MuiTableCell-root {
+  height: 46px;
+  padding: 7px 8px;
+  color: #3f4d59;
+  border-right: 1px solid #dce4eb;
+  border-bottom: 1px solid #dce4eb;
+}
+
+.RaDatagrid-root .MuiTableBody-root .MuiTableRow-root:nth-of-type(even) {
+  background: #f4f7f9;
+}
+
+.RaDatagrid-root .MuiTableBody-root .MuiTableRow-root:hover {
+  background: #edf4f7;
+}
+
+.RaDatagrid-root .RaEditButton-root,
+.RaDatagrid-root .RaDeleteButton-root {
+  min-width: auto;
+  padding: 3px 5px;
+  color: #34495a;
+  text-transform: none;
+}
+
+.RaDatagrid-root .RaEditButton-root .MuiButton-startIcon,
+.RaDatagrid-root .RaDeleteButton-root .MuiButton-startIcon {
+  display: none;
+}
+
+.scope-panel {
+  margin-top: 26px;
+  border: 1px solid #e79a18;
+  border-radius: 8px !important;
+  background: #fff7e8 !important;
+  box-shadow: none !important;
+}
+
+.scope-panel .MuiCardContent-root {
+  padding: 14px !important;
+}
+
+.scope-panel h2 {
+  margin-bottom: 5px;
+  color: #183650;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.scope-panel p {
+  color: #465563;
+  font-size: 14px;
+}
+
+.admin-dashboard {
+  max-width: 900px;
+}
+
+.admin-dashboard h1 {
+  margin: 0 0 12px;
+  color: #183650;
+  font-weight: 700;
+}
+
+.dashboard-intro {
+  margin-bottom: 22px !important;
+  color: #566573;
+}
+
+@media (max-width: 700px) {
+  .admin-brand {
+    overflow: hidden;
+    max-width: calc(100vw - 110px);
+    font-size: 15px !important;
+    text-overflow: ellipsis;
+  }
+
+  .RaLayout-content {
+    padding: 14px 12px 22px !important;
+  }
+
+  .RaDatagrid-root {
+    overflow-x: auto;
+  }
 }
