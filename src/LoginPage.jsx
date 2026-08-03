@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useLogin, useNotify } from 'react-admin'
 import {
   Alert,
   Box,
@@ -14,11 +13,9 @@ import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import artisanHero from './assets/artisan-login-hero.png'
+import artisanHero from './assets/artisan-login-hero.webp'
 
 export const LoginPage = () => {
-  const login = useLogin()
-  const notify = useNotify()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -30,11 +27,19 @@ export const LoginPage = () => {
     setError('')
     setLoading(true)
     try {
-      await login({ username: email.trim(), password })
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload.error || 'Unable to sign in. Please check your credentials.')
+      localStorage.setItem('admin_token', payload.token)
+      localStorage.setItem('admin_identity', JSON.stringify(payload.user))
+      window.location.replace('/')
     } catch (loginError) {
       const message = loginError?.message || 'Unable to sign in. Please check your credentials.'
       setError(message)
-      notify(message, { type: 'error' })
       setLoading(false)
     }
   }

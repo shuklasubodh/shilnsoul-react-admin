@@ -20,7 +20,9 @@ export const authProvider = {
     localStorage.setItem(IDENTITY_KEY, JSON.stringify(payload.user))
   },
   logout: () => { clearSession(); return Promise.resolve() },
-  checkAuth: () => localStorage.getItem(TOKEN_KEY) ? Promise.resolve() : Promise.reject(),
+  checkAuth: () => localStorage.getItem(TOKEN_KEY)
+    ? Promise.resolve()
+    : Promise.reject({ redirectTo: '/login', logoutUser: false }),
   checkError: (error) => {
     if (error?.status === 401 || error?.status === 403) {
       clearSession()
