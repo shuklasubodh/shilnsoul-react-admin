@@ -70,22 +70,31 @@ export function BulkUploadButton({ mode }) {
       const token = localStorage.getItem('admin_token')
       const productsWithLocalImages = mode === 'products' ? preview.products.filter((product) => product.image_reference) : []
       const unmatched = productsWithLocalImages.filter((product) => !filesForReference(product.image_reference).length)
-      const products = mode === 'products' ? await Promise.all(preview.products.map(async (product, productIndex) => {
-        const matchedFiles = filesForReference(product.image_reference)
-        const uploadedUrls = []
-        for (let fileIndex = 0; fileIndex < matchedFiles.length; fileIndex += 1) {
-          const file = matchedFiles[fileIndex]
-          setUploadProgress(`Uploading image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
-          const blob = await uploadBlob(`products/${product.slug}/${file.name}`, file, {
-            access: 'public',
-            handleUploadUrl: `${API_URL}/blob-upload`,
-            clientPayload: JSON.stringify({ adminToken: token }),
-          })
-          uploadedUrls.push(blob.url)
+      const imageFailures = []
+      const products = []
+      if (mode === 'products') {
+        for (let productIndex = 0; productIndex < preview.products.length; productIndex += 1) {
+          const product = preview.products[productIndex]
+          const matchedFiles = filesForReference(product.image_reference)
+          const uploadedUrls = []
+          for (let fileIndex = 0; fileIndex < matchedFiles.length; fileIndex += 1) {
+            const file = matchedFiles[fileIndex]
+            setUploadProgress(`Uploading image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
+            try {
+              const blob = await uploadBlob(`products/${product.slug}/${file.name}`, file, {
+                access: 'public',
+                handleUploadUrl: `${API_URL}/blob-upload`,
+                clientPayload: JSON.stringify({ adminToken: token }),
+              })
+              uploadedUrls.push(blob.url)
+            } catch (error) {
+              imageFailures.push({ product: product.name, file: file.name, message: error.message })
+            }
+          }
+          const imageUrls = uploadedUrls.length ? uploadedUrls : product.image_urls
+          products.push({ ...product, image_url: imageUrls[0] || '', image_urls: imageUrls })
         }
-        const imageUrls = uploadedUrls.length ? uploadedUrls : product.image_urls
-        return { ...product, image_url: imageUrls[0] || '', image_urls: imageUrls }
-      })) : []
+      }
       const response = await fetch(`${API_URL}/bulk-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -96,7 +105,7 @@ export function BulkUploadButton({ mode }) {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Bulk upload failed.')
-      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated${unmatched.length ? `; images skipped for ${unmatched.length} products` : ''}` : ''}.`, { type: 'success' })
+      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated${unmatched.length ? `; images missing for ${unmatched.length} products` : ''}${imageFailures.length ? `; ${imageFailures.length} image uploads failed` : ''}` : ''}.`, { type: imageFailures.length ? 'warning' : 'success' })
       reset()
       refresh()
     } catch (error) {

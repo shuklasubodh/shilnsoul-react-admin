@@ -102,21 +102,30 @@ export default async function handler(request, response) {
 
   try {
     if (resourceName === 'blob-upload' && !id && !extra.length && request.method === 'POST') {
-      const result = await handleUpload({
-        request,
-        body: request.body,
-        onBeforeGenerateToken: async (_pathname, clientPayload) => {
-          const { adminToken } = parseJson(clientPayload, {})
-          const session = jwt.verify(adminToken || '', authSecret, { issuer: 'shilpnsoul-admin' })
-          if (session.role !== 'ADMIN') throw new Error('Administrator access is required.')
-          return {
-            allowedContentTypes: ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
-            addRandomSuffix: true,
-          }
-        },
-        onUploadCompleted: async () => {},
-      })
-      return json(response, 200, result)
+      if (!process.env.BLOB_READ_WRITE_TOKEN) {
+        console.error('[blob-upload] BLOB_READ_WRITE_TOKEN is not configured')
+        return json(response, 503, { error: 'Image storage is not configured. Connect a Vercel Blob store to this project.' })
+      }
+      try {
+        const result = await handleUpload({
+          request,
+          body: request.body,
+          onBeforeGenerateToken: async (_pathname, clientPayload) => {
+            const { adminToken } = parseJson(clientPayload, {})
+            const session = jwt.verify(adminToken || '', authSecret, { issuer: 'shilpnsoul-admin' })
+            if (session.role !== 'ADMIN') throw new Error('Administrator access is required.')
+            return {
+              allowedContentTypes: ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+              addRandomSuffix: true,
+            }
+          },
+          onUploadCompleted: async () => {},
+        })
+        return json(response, 200, result)
+      } catch (error) {
+        console.error('[blob-upload] Failed to issue or complete an upload token:', error)
+        return json(response, 400, { error: error.message || 'Image upload authorization failed.' })
+      }
     }
 
     if (resourceName === 'auth' && id === 'login' && !extra.length && request.method === 'POST') {
