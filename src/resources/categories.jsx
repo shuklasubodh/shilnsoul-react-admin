@@ -1,11 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
   BooleanField, BooleanInput, Create, Datagrid, DateField, Edit, EditButton,
-  List, required, SearchInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
+  CreateButton, List, required, SearchInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput, TopToolbar,
 } from 'react-admin'
+import { BulkUploadButton } from '../BulkUploadButton'
+
+const CategoryActions = () => <TopToolbar><BulkUploadButton mode="categories" /><CreateButton label="Add category" /></TopToolbar>
 
 const CategoryList = () => (
-  <List filters={[<SearchInput key="search" source="q" alwaysOn />]}>
+  <List actions={<CategoryActions />} filters={[<SearchInput key="search" source="q" alwaysOn />]}>
     <Datagrid rowClick="show">
       <TextField source="id" /><TextField source="name" /><TextField source="slug" />
       <BooleanField source="is_active" /><DateField source="created_at" showTime /><EditButton />

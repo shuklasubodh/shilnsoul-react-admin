@@ -124,6 +124,72 @@ export default async function handler(request, response) {
       return json(response, 401, { error: 'Authentication is required.' })
     }
 
+    if (resourceName === 'bulk-import' && !id && !extra.length && request.method === 'POST') {
+      const categories = Array.isArray(request.body?.categories) ? request.body.categories : []
+      const products = Array.isArray(request.body?.products) ? request.body.products : []
+      if (!categories.length && !products.length) return json(response, 400, { error: 'At least one category or product is required.' })
+      if (categories.length > 500 || products.length > 2000) return json(response, 400, { error: 'A single upload is limited to 500 categories and 2,000 products.' })
+
+      const invalidCategory = categories.find((item) => !item?.name || !item?.slug)
+      const invalidProduct = products.find((item) => !item?.name || !item?.slug || !item?.sku || !item?.category_slug || Number(item.price) < 0 || Number(item.stock_quantity) < 0)
+      if (invalidCategory || invalidProduct) return json(response, 400, { error: 'The upload contains missing or invalid required fields.' })
+
+      const categoryIds = new Map()
+      const categoryResult = { created: 0, updated: 0 }
+      const productResult = { created: 0, updated: 0 }
+
+      for (const category of categories) {
+        const existing = await sql.query('SELECT id FROM categories WHERE LOWER(slug) = LOWER($1) OR LOWER(name) = LOWER($2) LIMIT 1', [String(category.slug).trim(), String(category.name).trim()])
+        if (existing.length) {
+          await sql.query(
+            'UPDATE categories SET name = $1, slug = $2, description = $3, is_active = $4, updated_at = NOW() WHERE id = $5',
+            [String(category.name).trim(), String(category.slug).trim(), String(category.description || ''), category.is_active !== false, existing[0].id],
+          )
+          categoryIds.set(String(category.slug).toLowerCase(), existing[0].id)
+          categoryResult.updated += 1
+        } else {
+          const created = await sql.query(
+            'INSERT INTO categories (name, slug, description, is_active) VALUES ($1, $2, $3, $4) RETURNING id',
+            [String(category.name).trim(), String(category.slug).trim(), String(category.description || ''), category.is_active !== false],
+          )
+          categoryIds.set(String(category.slug).toLowerCase(), created[0].id)
+          categoryResult.created += 1
+        }
+      }
+
+      for (const product of products) {
+        const categoryKey = String(product.category_slug).toLowerCase()
+        let categoryId = categoryIds.get(categoryKey)
+        if (!categoryId) {
+          const category = await sql.query('SELECT id FROM categories WHERE LOWER(slug) = LOWER($1) LIMIT 1', [categoryKey])
+          categoryId = category[0]?.id
+        }
+        if (!categoryId) return json(response, 400, { error: `No category was found for product SKU ${product.sku}.` })
+
+        const values = [
+          String(product.name).trim(), String(product.slug).trim(), String(product.sku).trim(), categoryId,
+          String(product.description || ''), Number(product.price), Math.floor(Number(product.stock_quantity)),
+          String(product.image_url || ''), product.is_active !== false,
+        ]
+        const existing = await sql.query('SELECT id FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(product.sku).trim()])
+        if (existing.length) {
+          await sql.query(
+            'UPDATE products SET name = $1, slug = $2, sku = $3, category_id = $4, description = $5, price = $6, stock_quantity = $7, image_url = $8, is_active = $9, updated_at = NOW() WHERE id = $10',
+            [...values, existing[0].id],
+          )
+          productResult.updated += 1
+        } else {
+          await sql.query(
+            'INSERT INTO products (name, slug, sku, category_id, description, price, stock_quantity, image_url, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+            values,
+          )
+          productResult.created += 1
+        }
+      }
+
+      return json(response, 200, { message: 'Bulk import completed.', categories: categoryResult, products: productResult })
+    }
+
     const resource = resources[resourceName]
     if (!resource || extra.length || (id && !positiveId(id))) return json(response, 404, { error: 'API route not found.' })
 

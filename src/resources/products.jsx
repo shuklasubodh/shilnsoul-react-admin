@@ -7,8 +7,9 @@ import {
 } from 'react-admin'
 import { Box } from '@mui/material'
 import { ScopePanel } from '../Dashboard'
+import { BulkUploadButton } from '../BulkUploadButton'
 
-const ProductActions = () => <TopToolbar><CreateButton label="Add product" /></TopToolbar>
+const ProductActions = () => <TopToolbar><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
 
 const ProductList = () => (
   <List
