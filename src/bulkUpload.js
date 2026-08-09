@@ -102,6 +102,8 @@ export function transformCatalogRows(sheetRows, fileName, sheetName) {
       price,
       stock_quantity: Math.floor(stock),
       image_url: /^https?:\/\//i.test(imageValue) ? imageValue : '',
+      image_reference: /^https?:\/\//i.test(imageValue) ? '' : imageValue,
+      image_urls: /^https?:\/\//i.test(imageValue) ? [imageValue] : [],
       is_active: true,
       source_row: sourceRow,
     })

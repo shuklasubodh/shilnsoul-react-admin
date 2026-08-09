@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  BooleanField, BooleanInput, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField, ImageField,
+  BooleanField, BooleanInput, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
   SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
   TopToolbar, WrapperField,
 } from 'react-admin'
-import { Box } from '@mui/material'
+import { Box, ImageList, ImageListItem } from '@mui/material'
 import { ScopePanel } from '../Dashboard'
 import { BulkUploadButton } from '../BulkUploadButton'
 
@@ -43,7 +43,9 @@ const ProductForm = () => (
 
 const ProductShow = () => (
   <Show><SimpleShowLayout>
-    <TextField source="id" /><ImageField source="image_url" /><TextField source="name" />
+    <TextField source="id" /><FunctionField label="Images" render={(record) => <ImageList cols={4} sx={{ maxWidth: 720 }}>
+      {(record.images?.length ? record.images : record.image_url ? [record.image_url] : []).map((url) => <ImageListItem key={url}><img src={url} alt={record.name} loading="lazy" /></ImageListItem>)}
+    </ImageList>} /><TextField source="name" />
     <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" />
     <TextField source="description" /><NumberField source="price" /><NumberField source="stock_quantity" /><BooleanField source="is_active" />
   </SimpleShowLayout></Show>

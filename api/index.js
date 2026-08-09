@@ -2,6 +2,7 @@ import { neon } from '@neondatabase/serverless'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { handleUpload } from '@vercel/blob/client'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -59,6 +60,19 @@ const parseJson = (value, fallback) => {
   try { return JSON.parse(value) } catch { return fallback }
 }
 
+const productImages = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((url) => /^https?:\/\//i.test(String(url)))
+  const parsed = parseJson(value, null)
+  return Array.isArray(parsed) ? parsed.filter((url) => /^https?:\/\//i.test(String(url))) : (/^https?:\/\//i.test(String(value)) ? [String(value)] : [])
+}
+
+const publicRecord = (resourceName, record) => {
+  if (resourceName !== 'products' || !record) return record
+  const images = productImages(record.image_url)
+  return { ...record, image_url: images[0] || '', images }
+}
+
 const databaseError = (response, error) => {
   console.error('Database request failed:', error)
   if (error.code === '42P01' || error.code === '42703') {
@@ -87,6 +101,24 @@ export default async function handler(request, response) {
   const sql = neon(connectionString)
 
   try {
+    if (resourceName === 'blob-upload' && !id && !extra.length && request.method === 'POST') {
+      const result = await handleUpload({
+        request,
+        body: request.body,
+        onBeforeGenerateToken: async (_pathname, clientPayload) => {
+          const { adminToken } = parseJson(clientPayload, {})
+          const session = jwt.verify(adminToken || '', authSecret, { issuer: 'shilpnsoul-admin' })
+          if (session.role !== 'ADMIN') throw new Error('Administrator access is required.')
+          return {
+            allowedContentTypes: ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
+            addRandomSuffix: true,
+          }
+        },
+        onUploadCompleted: async () => {},
+      })
+      return json(response, 200, result)
+    }
+
     if (resourceName === 'auth' && id === 'login' && !extra.length && request.method === 'POST') {
       const { email, password } = request.body || {}
       if (!email || !password) return json(response, 400, { error: 'Email and password are required.' })
@@ -169,7 +201,7 @@ export default async function handler(request, response) {
         const values = [
           String(product.name).trim(), String(product.slug).trim(), String(product.sku).trim(), categoryId,
           String(product.description || ''), Number(product.price), Math.floor(Number(product.stock_quantity)),
-          String(product.image_url || ''), product.is_active !== false,
+          JSON.stringify(productImages(product.image_urls?.length ? product.image_urls : product.image_url)), product.is_active !== false,
         ]
         const existing = await sql.query('SELECT id FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(product.sku).trim()])
         if (existing.length) {
@@ -205,7 +237,7 @@ export default async function handler(request, response) {
     if (request.method === 'GET' && id) {
       const rows = await sql.query(`SELECT ${selectColumns} FROM "${resource.table}" WHERE id = $1`, [id])
       if (!rows.length) return json(response, 404, { error: 'Record not found.' })
-      return json(response, 200, rows[0])
+      return json(response, 200, publicRecord(resourceName, rows[0]))
     }
 
     if (request.method === 'GET') {
@@ -246,7 +278,7 @@ export default async function handler(request, response) {
         listValues,
       )
       response.setHeader('X-Total-Count', String(count))
-      return json(response, 200, rows)
+      return json(response, 200, rows.map((record) => publicRecord(resourceName, record)))
     }
 
     if (request.method === 'POST' && !id) {
@@ -264,7 +296,7 @@ export default async function handler(request, response) {
         `INSERT INTO "${resource.table}" (${columns.map((column) => `"${column}"`).join(', ')}) VALUES (${placeholders}) RETURNING ${selectColumns}`,
         values,
       )
-      return json(response, 201, { message: 'Record created successfully.', [resource.responseKey]: rows[0] })
+      return json(response, 201, { message: 'Record created successfully.', [resource.responseKey]: publicRecord(resourceName, rows[0]) })
     }
 
     if (request.method === 'PUT' && id) {
@@ -280,7 +312,7 @@ export default async function handler(request, response) {
         values,
       )
       if (!rows.length) return json(response, 404, { error: 'Record not found.' })
-      return json(response, 200, { message: 'Record updated successfully.', [resource.responseKey]: rows[0] })
+      return json(response, 200, { message: 'Record updated successfully.', [resource.responseKey]: publicRecord(resourceName, rows[0]) })
     }
 
     if (request.method === 'DELETE' && id) {
