@@ -15,6 +15,7 @@ import { productResource } from './resources/products'
 import { userResource } from './resources/users'
 import { ProductImageMapping } from './ProductImageMapping'
 import { ImageMaintenance } from './ImageMaintenance'
+import { MediaConversion } from './MediaConversion'
 
 function App() {
   return (
@@ -45,6 +46,7 @@ function App() {
       <CustomRoutes>
         <Route path="/product-images" element={<ProductImageMapping />} />
         <Route path="/image-maintenance" element={<ImageMaintenance />} />
+        <Route path="/media-conversion" element={<MediaConversion />} />
       </CustomRoutes>
     </Admin>
   )
