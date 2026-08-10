@@ -9,7 +9,13 @@ const httpClient = (url, options = {}) =>
     const token = localStorage.getItem('admin_token')
     if (token) headers.set('Authorization', `Bearer ${token}`)
     return fetchUtils.fetchJson(url, { ...options, headers }).catch((error) => {
-      throw new HttpError(error.body?.error || error.message || 'Server communication error', error.status, error.body)
+      const isCategoryDeleteConflict = options.method === 'DELETE'
+        && /\/categories\/[^/]+$/.test(new URL(url, window.location.origin).pathname)
+        && error.status === 409
+      const message = isCategoryDeleteConflict
+        ? 'This category cannot be deleted because one or more products are using it. Reassign or delete those products first.'
+        : error.body?.error || error.message || 'Server communication error'
+      throw new HttpError(message, error.status, error.body)
     })
   }
 
