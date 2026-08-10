@@ -223,6 +223,9 @@ export function ProductImageMapping() {
         </Button>
       </Box>
     </Paper>
+    {!loading && unmappedOnly && visibleBlobs.length === 0 ? <Alert severity="info" sx={{ mb: 2 }} action={<Button onClick={() => setUnmappedOnly(false)}>Show all images</Button>}>
+      All listed Blob images are currently mapped. Turn off the unmapped-only filter to display them.
+    </Alert> : null}
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 260 }}><CircularProgress /></Box> :
       <Paper variant="outlined" sx={{ overflow: 'auto' }}><Table stickyHeader size="small">
         <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={selectedVisibleCount > 0 && !allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} inputProps={{ 'aria-label': 'Select all visible images' }} /></TableCell><TableCell>Preview</TableCell><TableCell>Blob pathname</TableCell><TableCell>Product</TableCell><TableCell>Primary</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>

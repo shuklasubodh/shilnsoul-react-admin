@@ -244,8 +244,20 @@ export default async function handler(request, response) {
     if (resourceName === 'blob-content' && !id && !extra.length && request.method === 'GET') {
       const blobUrl = String(request.query.url || '')
       if (!validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid Vercel Blob URL is required.' })
-      const access = blobUrl.includes('.private.blob.vercel-storage.com') ? 'private' : 'public'
-      const blobResult = await getBlob(blobUrl, { access })
+      const preferredAccess = blobUrl.includes('.private.blob.vercel-storage.com') ? 'private' : 'public'
+      let blobResult
+      let firstError
+      try {
+        blobResult = await getBlob(blobUrl, { access: preferredAccess })
+      } catch (error) {
+        firstError = error
+        try {
+          blobResult = await getBlob(blobUrl, { access: preferredAccess === 'private' ? 'public' : 'private' })
+        } catch (retryError) {
+          console.error('[blob-content] Blob could not be read using public or private access:', firstError, retryError)
+          return json(response, 502, { error: 'The configured Blob token cannot read this image. Confirm this project is connected to the Blob store containing the listed files.' })
+        }
+      }
       if (!blobResult) return json(response, 404, { error: 'Blob image not found.' })
       if (blobResult.statusCode === 304) return response.status(304).end()
       const bytes = Buffer.from(await new Response(blobResult.stream).arrayBuffer())
