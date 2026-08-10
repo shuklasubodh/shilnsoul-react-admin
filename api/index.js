@@ -124,6 +124,24 @@ const ensureProductImagesTable = async (sql) => {
   await sql.query('CREATE UNIQUE INDEX IF NOT EXISTS product_images_one_primary_idx ON product_images(product_id) WHERE is_primary')
 }
 
+const allProductBlobs = async () => {
+  const blobs = []
+  let cursor
+  do {
+    const page = await listBlobs({ prefix: 'products/', limit: 1000, cursor })
+    blobs.push(...page.blobs)
+    cursor = page.hasMore ? page.cursor : undefined
+  } while (cursor)
+  return blobs
+}
+
+const syncProductImageUrls = async (sql, productId) => {
+  const rows = await sql.query('SELECT blob_url FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [productId])
+  const urls = [...new Set(rows.map((row) => row.blob_url).filter((url) => validBlobUrl(url)))]
+  await sql.query('UPDATE products SET image_url = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(urls), productId])
+  return urls
+}
+
 const databaseError = (response, error) => {
   console.error('Database request failed:', error)
   if (error.code === '42P01' || error.code === '42703') {
@@ -241,6 +259,73 @@ export default async function handler(request, response) {
       return json(response, 405, { error: 'Method not allowed.' })
     }
 
+    if (resourceName === 'image-repair' && !id && !extra.length && request.method === 'POST') {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) return json(response, 503, { error: 'Connect a Vercel Blob store before repairing image references.' })
+      await ensureProductImagesTable(sql)
+      const blobs = await allProductBlobs()
+      const blobByPath = new Map(blobs.map((blob) => [blob.pathname, blob]))
+      const blobByUrl = new Map(blobs.map((blob) => [blob.url, blob]))
+      const products = await sql.query('SELECT id, slug, image_url FROM products ORDER BY id')
+      let repairedMappings = 0
+      let removedStaleMappings = 0
+      let createdMappings = 0
+      let updatedProducts = 0
+      let assignedPrimaries = 0
+
+      const brokenMappings = await sql.query('SELECT id, product_id, blob_url, blob_pathname FROM product_images')
+      for (const mapping of brokenMappings) {
+        if (blobByUrl.has(mapping.blob_url)) continue
+        const replacement = blobByPath.get(mapping.blob_pathname)
+        if (!replacement) {
+          await sql.query('DELETE FROM product_images WHERE id = $1', [mapping.id])
+          removedStaleMappings += 1
+          continue
+        }
+        const duplicate = await sql.query('SELECT id FROM product_images WHERE product_id = $1 AND blob_url = $2 AND id <> $3 LIMIT 1', [mapping.product_id, replacement.url, mapping.id])
+        if (duplicate.length) await sql.query('DELETE FROM product_images WHERE id = $1', [mapping.id])
+        else await sql.query('UPDATE product_images SET blob_url = $1, updated_at = NOW() WHERE id = $2', [replacement.url, mapping.id])
+        repairedMappings += 1
+      }
+
+      for (const product of products) {
+        const existingRows = await sql.query('SELECT id, blob_url, blob_pathname, sort_order, is_primary FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [product.id])
+        const knownUrls = new Set(existingRows.map((row) => row.blob_url).filter((url) => blobByUrl.has(url)))
+        const candidates = []
+        for (const legacyUrl of productImages(product.image_url)) if (blobByUrl.has(legacyUrl)) candidates.push(blobByUrl.get(legacyUrl))
+        const productPrefix = `products/${product.slug}/`
+        for (const blob of blobs) if (blob.pathname.startsWith(productPrefix)) candidates.push(blob)
+        for (const blob of candidates) {
+          if (knownUrls.has(blob.url)) continue
+          await sql.query(`
+            INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
+            VALUES ($1, $2, $3, $4, FALSE)
+            ON CONFLICT (product_id, blob_url) DO NOTHING
+          `, [product.id, blob.url, blob.pathname, knownUrls.size])
+          knownUrls.add(blob.url)
+          createdMappings += 1
+        }
+        const validRows = await sql.query('SELECT id, blob_url, is_primary FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [product.id])
+        const validImages = [...new Set(validRows.map((row) => row.blob_url).filter((url) => blobByUrl.has(url)))]
+        if (validImages.length && !validRows.some((row) => row.is_primary && blobByUrl.has(row.blob_url))) {
+          await sql.query('UPDATE product_images SET is_primary = (id = $1), updated_at = NOW() WHERE product_id = $2', [validRows.find((row) => blobByUrl.has(row.blob_url)).id, product.id])
+          assignedPrimaries += 1
+        }
+        const storedImages = productImages(product.image_url)
+        if (JSON.stringify(storedImages) !== JSON.stringify(validImages)) {
+          await sql.query('UPDATE products SET image_url = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(validImages), product.id])
+          updatedProducts += 1
+        }
+      }
+      return json(response, 200, {
+        blobs_found: blobs.length,
+        repaired_mappings: repairedMappings,
+        removed_stale_mappings: removedStaleMappings,
+        created_mappings: createdMappings,
+        updated_products: updatedProducts,
+        assigned_primaries: assignedPrimaries,
+      })
+    }
+
     if (resourceName === 'blob-content' && !id && !extra.length && request.method === 'GET') {
       const blobUrl = String(request.query.url || '')
       if (!validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid Vercel Blob URL is required.' })
@@ -293,11 +378,14 @@ export default async function handler(request, response) {
             updated_at = NOW()
           RETURNING *
         `, [productId, String(blobUrl), String(blobPathname), Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isPrimary)])
+        await syncProductImageUrls(sql, productId)
         return json(response, 200, rows[0])
       }
       if (request.method === 'DELETE' && id && positiveId(id)) {
-        const rows = await sql.query('DELETE FROM product_images WHERE id = $1 RETURNING id', [id])
-        return rows.length ? json(response, 200, rows[0]) : json(response, 404, { error: 'Image mapping not found.' })
+        const rows = await sql.query('DELETE FROM product_images WHERE id = $1 RETURNING id, product_id', [id])
+        if (!rows.length) return json(response, 404, { error: 'Image mapping not found.' })
+        await syncProductImageUrls(sql, rows[0].product_id)
+        return json(response, 200, rows[0])
       }
       return json(response, 405, { error: 'Method not allowed.' })
     }

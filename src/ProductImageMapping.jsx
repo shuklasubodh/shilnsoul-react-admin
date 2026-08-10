@@ -7,6 +7,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import BuildIcon from '@mui/icons-material/Build'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
 
 const apiFetch = async (path, options = {}) => {
@@ -32,6 +33,7 @@ export function ProductImageMapping() {
   const [deletingMultiple, setDeletingMultiple] = useState(false)
   const [selectedUrls, setSelectedUrls] = useState([])
   const [error, setError] = useState('')
+  const [repairing, setRepairing] = useState(false)
   const [unmappedOnly, setUnmappedOnly] = useState(false)
   const [folderFilter, setFolderFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
@@ -195,11 +197,25 @@ export function ProductImageMapping() {
     setDeletingMultiple(false)
   }
 
+  const repairImages = async () => {
+    if (!window.confirm('Reconcile Blob files, product image mappings, and product image URLs? No Blob files will be deleted.')) return
+    setRepairing(true)
+    try {
+      const result = await apiFetch('image-repair', { method: 'POST' })
+      notify(`Repair complete: ${result.repaired_mappings} mappings repaired, ${result.removed_stale_mappings} stale mappings removed, ${result.created_mappings} mappings created, ${result.updated_products} products updated, ${result.assigned_primaries} primary images assigned.`, { type: 'success' })
+      await load()
+    } catch (repairError) {
+      notify(repairError.message, { type: 'error' })
+    } finally {
+      setRepairing(false)
+    }
+  }
+
   return <Box className="image-mapping-page">
     <Title title="Product image mapping" />
     <Box className="image-mapping-header">
       <Box><Typography variant="h4">Product image mapping</Typography><Typography color="text.secondary">Assign public Blob images under products/ to catalog products.</Typography></Box>
-      <Button startIcon={<RefreshIcon />} onClick={load} disabled={loading}>Refresh</Button>
+      <Box sx={{ display: 'flex', gap: 1 }}><Button startIcon={<BuildIcon />} onClick={repairImages} disabled={loading || repairing}>{repairing ? 'Repairing…' : 'Repair image references'}</Button><Button startIcon={<RefreshIcon />} onClick={load} disabled={loading || repairing}>Refresh</Button></Box>
     </Box>
     {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
