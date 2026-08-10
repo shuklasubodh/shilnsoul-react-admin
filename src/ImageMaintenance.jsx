@@ -51,6 +51,29 @@ const imageFingerprint = async (blob) => {
 
 const distance = (left, right) => [...left].reduce((total, bit, index) => total + (bit !== right[index] ? 1 : 0), 0)
 
+const exactDuplicateGroups = (blobs) => {
+  const groups = new Map()
+  blobs.forEach((blob) => {
+    if (!blob.etag) return
+    const key = `${blob.size}:${blob.etag}`
+    groups.set(key, [...(groups.get(key) || []), blob])
+  })
+  return [...groups.values()].filter((group) => group.length > 1)
+}
+
+const keeperFor = (group, mappingByUrl) => [...group].sort((left, right) => {
+  const leftMapping = mappingByUrl.get(left.url)
+  const rightMapping = mappingByUrl.get(right.url)
+  return Number(Boolean(rightMapping?.is_primary)) - Number(Boolean(leftMapping?.is_primary))
+    || Number(Boolean(rightMapping)) - Number(Boolean(leftMapping))
+    || new Date(left.uploadedAt || 0) - new Date(right.uploadedAt || 0)
+})[0]
+
+const suggestedDuplicateUrls = (groups, mappingByUrl) => groups.flatMap((group) => {
+  const keeper = keeperFor(group, mappingByUrl)
+  return group.filter((blob) => blob.url !== keeper.url).map((blob) => blob.url)
+})
+
 export function ImageMaintenance() {
   const notify = useNotify()
   const [blobs, setBlobs] = useState([])
@@ -68,9 +91,12 @@ export function ImageMaintenance() {
     setError('')
     try {
       const [blobResult, mappingRows] = await Promise.all([apiFetch('blob-images'), apiFetch('product-images')])
-      setBlobs(blobResult.blobs || [])
-      setMappings(mappingRows || [])
-      setSelected([])
+      const blobRows = blobResult.blobs || []
+      const imageMappings = mappingRows || []
+      const mappingsByUrl = new Map(imageMappings.map((item) => [item.blob_url, item]))
+      setBlobs(blobRows)
+      setMappings(imageMappings)
+      setSelected(suggestedDuplicateUrls(exactDuplicateGroups(blobRows), mappingsByUrl))
       setSimilarGroups([])
     } catch (loadError) {
       setError(loadError.message)
@@ -82,26 +108,10 @@ export function ImageMaintenance() {
   useEffect(() => { const timer = window.setTimeout(load, 0); return () => window.clearTimeout(timer) }, [load])
 
   const mappingByUrl = useMemo(() => new Map(mappings.map((item) => [item.blob_url, item])), [mappings])
-  const exactGroups = useMemo(() => {
-    const groups = new Map()
-    blobs.forEach((blob) => {
-      if (!blob.etag) return
-      const key = `${blob.size}:${blob.etag}`
-      groups.set(key, [...(groups.get(key) || []), blob])
-    })
-    return [...groups.values()].filter((group) => group.length > 1)
-  }, [blobs])
-
-  const keeperFor = (group) => [...group].sort((left, right) => {
-    const leftMapping = mappingByUrl.get(left.url)
-    const rightMapping = mappingByUrl.get(right.url)
-    return Number(Boolean(rightMapping?.is_primary)) - Number(Boolean(leftMapping?.is_primary))
-      || Number(Boolean(rightMapping)) - Number(Boolean(leftMapping))
-      || new Date(left.uploadedAt || 0) - new Date(right.uploadedAt || 0)
-  })[0]
+  const exactGroups = useMemo(() => exactDuplicateGroups(blobs), [blobs])
 
   const selectSuggestions = (group) => {
-    const keeper = keeperFor(group)
+    const keeper = keeperFor(group, mappingByUrl)
     setSelected((current) => [...new Set([...current, ...group.filter((blob) => blob.url !== keeper.url).map((blob) => blob.url)])])
   }
 
@@ -122,7 +132,9 @@ export function ImageMaintenance() {
       }
       const groups = new Map()
       fingerprints.forEach((item, index) => groups.set(find(index), [...(groups.get(find(index)) || []), item.blob]))
-      setSimilarGroups([...groups.values()].filter((group) => group.length > 1))
+      const foundGroups = [...groups.values()].filter((group) => group.length > 1)
+      setSimilarGroups(foundGroups)
+      setSelected((current) => [...new Set([...current, ...suggestedDuplicateUrls(foundGroups, mappingByUrl)])])
       notify(`Similarity scan complete${failed ? `; ${failed} images could not be read` : ''}.`, { type: failed ? 'warning' : 'success' })
     } finally {
       setScanning(false)
@@ -142,7 +154,7 @@ export function ImageMaintenance() {
   }
 
   const renderGroup = (group, label) => {
-    const keeper = keeperFor(group)
+    const keeper = keeperFor(group, mappingByUrl)
     return <Paper key={`${label}-${group[0].url}`} variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Typography variant="subtitle1">{label} · {group.length} images</Typography>
@@ -166,7 +178,7 @@ export function ImageMaintenance() {
       <Button variant="outlined" startIcon={<ImageSearchIcon />} onClick={scan} disabled={loading || scanning || !blobs.length}>{scanning ? 'Scanning…' : 'Scan possible duplicates'}</Button>
       <Button color="error" variant="contained" startIcon={<DeleteForeverIcon />} onClick={removeSelected} disabled={!selected.length || deleting}>{deleting ? 'Deleting…' : `Delete selected (${selected.length})`}</Button>
     </Box>
-    <Alert severity="info" sx={{ mb: 2 }}>Nothing is deleted automatically. Review every group; the suggested keeper favors primary and mapped product images.</Alert>
+    <Alert severity="info" sx={{ mb: 2 }}>Suggested keepers remain unchecked; all other duplicate candidates are preselected. Nothing is deleted until you review and confirm.</Alert>
     {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
     {scanning ? <LinearProgress variant="determinate" value={progress} sx={{ mb: 2 }} /> : null}
     {loading ? <CircularProgress /> : <>
