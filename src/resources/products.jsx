@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  BooleanField, BooleanInput, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField,
+  BooleanField, BooleanInput, BulkDeleteButton, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
   SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
   TopToolbar, WrapperField,
@@ -10,6 +10,7 @@ import { ScopePanel } from '../Dashboard'
 import { BulkUploadButton } from '../BulkUploadButton'
 
 const ProductActions = () => <TopToolbar><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
+const ProductBulkActions = () => <BulkDeleteButton mutationMode="pessimistic" />
 
 const ProductList = () => (
   <List
@@ -18,7 +19,7 @@ const ProductList = () => (
     sort={{ field: 'id', order: 'ASC' }}
   >
     <Box>
-      <Datagrid bulkActionButtons={false} rowClick={false}>
+      <Datagrid bulkActionButtons={<ProductBulkActions />} rowClick={false}>
         <TextField source="sku" label="SKU" /><TextField source="name" /><TextField source="slug" />
         <NumberField source="price" options={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} />
         <NumberField source="stock_quantity" label="Stock" />
