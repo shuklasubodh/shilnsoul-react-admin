@@ -340,6 +340,11 @@ export default async function handler(request, response) {
       const values = []
       const q = filter.q ?? request.query._q
 
+      if (resourceName === 'products' && availableColumns.includes('is_active') && !Object.hasOwn(filter, 'is_active')) {
+        values.push(true)
+        clauses.push(`"is_active" = $${values.length}`)
+      }
+
       if (q) {
         const searchableColumns = resource.searchColumns.filter((column) => readableColumns.includes(column))
         if (searchableColumns.length) {
@@ -404,6 +409,12 @@ export default async function handler(request, response) {
     }
 
     if (request.method === 'DELETE' && id) {
+      if (resourceName === 'products' && availableColumns.includes('is_active')) {
+        const updatedAt = availableColumns.includes('updated_at') ? ', "updated_at" = NOW()' : ''
+        const rows = await sql.query(`UPDATE "products" SET "is_active" = FALSE${updatedAt} WHERE id = $1 RETURNING id`, [id])
+        if (!rows.length) return json(response, 404, { error: 'Record not found.' })
+        return json(response, 200, { message: 'Product archived successfully.', id: rows[0].id })
+      }
       const rows = await sql.query(`DELETE FROM "${resource.table}" WHERE id = $1 RETURNING id`, [id])
       if (!rows.length) return json(response, 404, { error: 'Record not found.' })
       return json(response, 200, { message: 'Record deleted successfully.', id: rows[0].id })
