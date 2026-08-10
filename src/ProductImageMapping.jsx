@@ -28,6 +28,7 @@ export function ProductImageMapping() {
   const [loading, setLoading] = useState(true)
   const [savingUrl, setSavingUrl] = useState('')
   const [savingMultiple, setSavingMultiple] = useState(false)
+  const [deletingMultiple, setDeletingMultiple] = useState(false)
   const [selectedUrls, setSelectedUrls] = useState([])
   const [error, setError] = useState('')
   const [unmappedOnly, setUnmappedOnly] = useState(false)
@@ -161,6 +162,38 @@ export function ProductImageMapping() {
     }
   }
 
+  const deleteSelected = async () => {
+    const selectedBlobs = blobs.filter((blob) => selectedUrlSet.has(blob.url))
+    if (!selectedBlobs.length) return notify('Select at least one Blob image.', { type: 'warning' })
+    const mappedCount = selectedBlobs.filter((blob) => mappedByUrl.has(blob.url)).length
+    const confirmed = window.confirm(
+      `Permanently delete ${selectedBlobs.length} selected Blob image${selectedBlobs.length === 1 ? '' : 's'}?\n\n`
+      + `${mappedCount} selected image${mappedCount === 1 ? ' is' : 's are'} mapped to products; those database mappings will also be removed. This action cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    setDeletingMultiple(true)
+    const deletedUrls = []
+    const failures = []
+    for (const blob of selectedBlobs) {
+      try {
+        await apiFetch('blob-images', {
+          method: 'DELETE',
+          body: JSON.stringify({ blob_url: blob.url }),
+        })
+        deletedUrls.push(blob.url)
+      } catch (deleteError) {
+        failures.push(`${blob.pathname}: ${deleteError.message}`)
+      }
+    }
+
+    setSelectedUrls((current) => current.filter((url) => !deletedUrls.includes(url)))
+    if (deletedUrls.length) notify(`${deletedUrls.length} Blob image${deletedUrls.length === 1 ? '' : 's'} deleted.`, { type: 'success' })
+    if (failures.length) notify(`${failures.length} image${failures.length === 1 ? '' : 's'} could not be deleted. ${failures[0]}`, { type: 'error' })
+    await load()
+    setDeletingMultiple(false)
+  }
+
   return <Box className="image-mapping-page">
     <Title title="Product image mapping" />
     <Box className="image-mapping-header">
@@ -183,6 +216,9 @@ export function ProductImageMapping() {
         <Typography variant="body2" color="text.secondary">{visibleBlobs.length} shown</Typography>
         <Button variant="contained" onClick={saveSelected} disabled={savingMultiple || selectedUrls.length === 0}>
           {savingMultiple ? 'Saving…' : `Save selected (${selectedUrls.length})`}
+        </Button>
+        <Button color="error" variant="outlined" startIcon={<DeleteForeverIcon />} onClick={deleteSelected} disabled={deletingMultiple || savingMultiple || selectedUrls.length === 0}>
+          {deletingMultiple ? 'Deleting…' : `Delete selected Blobs (${selectedUrls.length})`}
         </Button>
       </Box>
     </Paper>
