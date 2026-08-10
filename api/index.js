@@ -82,6 +82,9 @@ const validBlobUrl = (value) => {
 }
 
 const ensureProductImagesTable = async (sql) => {
+  // Older deployments used a short VARCHAR for one image. Multiple public Blob
+  // URLs are stored as JSON, so upgrade the existing column without data loss.
+  await sql.query('ALTER TABLE products ALTER COLUMN image_url TYPE TEXT USING image_url::text')
   await sql.query(`
     CREATE TABLE IF NOT EXISTS product_images (
       id BIGSERIAL PRIMARY KEY,
@@ -95,7 +98,29 @@ const ensureProductImagesTable = async (sql) => {
       UNIQUE (product_id, blob_url)
     )
   `)
+  // CREATE TABLE IF NOT EXISTS does not add constraints to an older table.
+  // Normalize legacy rows before adding the indexes required by upserts.
+  await sql.query(`
+    DELETE FROM product_images older
+    USING product_images newer
+    WHERE older.product_id = newer.product_id
+      AND older.blob_url = newer.blob_url
+      AND older.id > newer.id
+  `)
+  await sql.query(`
+    UPDATE product_images
+    SET is_primary = FALSE, updated_at = NOW()
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY id) AS position
+        FROM product_images
+        WHERE is_primary = TRUE
+      ) ranked
+      WHERE position > 1
+    )
+  `)
   await sql.query('CREATE INDEX IF NOT EXISTS product_images_product_id_idx ON product_images(product_id, sort_order, id)')
+  await sql.query('CREATE UNIQUE INDEX IF NOT EXISTS product_images_product_blob_idx ON product_images(product_id, blob_url)')
   await sql.query('CREATE UNIQUE INDEX IF NOT EXISTS product_images_one_primary_idx ON product_images(product_id) WHERE is_primary')
 }
 
@@ -107,6 +132,7 @@ const databaseError = (response, error) => {
   if (error.code === '23505') return json(response, 409, { error: 'A record with that unique value already exists.' })
   if (error.code === '23503') return json(response, 409, { error: 'This record is referenced by another record.' })
   if (error.code === '23502' || error.code === '23514' || error.code === '22P02') return json(response, 400, { error: 'A required field is missing or invalid.' })
+  if (error.code === '22001') return json(response, 400, { error: 'A database text column is too short for the uploaded value. Deploy the latest image-storage schema migration.' })
   return json(response, 500, { error: 'Database request failed.' })
 }
 
@@ -264,7 +290,7 @@ export default async function handler(request, response) {
       const categoryIds = new Map()
       const categoryResult = { created: 0, updated: 0 }
       const productResult = { created: 0, updated: 0 }
-      if (products.some((product) => productImages(product.image_urls?.length ? product.image_urls : product.image_url).length)) {
+      if (products.length) {
         await ensureProductImagesTable(sql)
       }
 

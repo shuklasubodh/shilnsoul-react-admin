@@ -50,20 +50,42 @@ export function BulkUploadButton({ mode }) {
     if (folderRef.current) folderRef.current.value = ''
   }
 
-  const normalizePath = (value) => String(value || '').replace(/\\/g, '/').replace(/^file:\/\//i, '').replace(/\/+$/, '').toLowerCase()
-  const imageExtensions = /\.(avif|gif|jpe?g|png|webp)$/i
+  const normalizePath = (value) => String(value || '').trim().replace(/\\/g, '/').replace(/^file:\/\//i, '').replace(/\/+$/, '').toLowerCase()
+  const imageExtensions = /\.(avif|bmp|gif|jfif|jpe?g|png|tiff?|webp)$/i
+  const normalizedName = (value) => String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(imageExtensions, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const isNamedVariant = (fileName, referenceName) => {
+    if (!fileName || !referenceName) return false
+    if (fileName === referenceName) return true
+    if (!fileName.startsWith(`${referenceName}-`)) return false
+    const suffix = fileName.slice(referenceName.length + 1)
+    return /^(?:\d+|(?:image|img|photo|pic)-?\d*|front|back|side|detail|close-?up)$/i.test(suffix)
+  }
   const filesForReference = (reference) => {
-    const wanted = normalizePath(reference)
-    if (!wanted) return []
-    const wantedParts = wanted.split('/').filter(Boolean)
-    const wantedName = wantedParts.at(-1)
-    const referenceIsFile = imageExtensions.test(wantedName)
+    const references = String(reference || '').split(/[;|\r\n]+/).map(normalizePath).filter(Boolean)
+    if (!references.length) return []
     return imageFiles.filter((file) => {
       const relative = normalizePath(file.webkitRelativePath || file.name)
       const parts = relative.split('/').filter(Boolean)
-      if (referenceIsFile) return parts.at(-1) === wantedName
-      return parts.slice(0, -1).includes(wantedName)
-        || relative.includes(`/${wantedParts.slice(-2).join('/')}/`)
+      const fileName = parts.at(-1)
+      const fileStem = normalizedName(fileName)
+      const directoryNames = parts.slice(0, -1).map(normalizedName)
+      return references.some((wanted) => {
+        const wantedParts = wanted.split('/').filter(Boolean)
+        const wantedName = wantedParts.at(-1)
+        const wantedStem = normalizedName(wantedName)
+        if (imageExtensions.test(wantedName)) return normalizedName(fileName) === wantedStem
+        // A workbook may contain either a product folder or an image filename
+        // without its extension. Numbered/front/back variants belong together.
+        return directoryNames.includes(wantedStem)
+          || isNamedVariant(fileStem, wantedStem)
+          || relative.includes(`/${wantedParts.slice(-2).join('/')}/`)
+      })
     })
   }
 
@@ -196,7 +218,7 @@ export function BulkUploadButton({ mode }) {
             action={<Button startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={uploading}>Select image folder</Button>}
           >{imageFiles.length ? `${imageFiles.length} image files selected. Folder references will be matched during upload.` : 'The workbook contains local image paths. Select their common parent folder to upload all product images.'}</Alert> : null}
           {unmatchedImageProducts.length ? <Alert severity="warning" sx={{ mb: 2 }}>
-            No images matched {unmatchedImageProducts.length} products. Those products will still be uploaded without images.
+            No images matched {unmatchedImageProducts.length} products: {unmatchedImageProducts.slice(0, 8).map((product) => product.image_reference).join(', ')}{unmatchedImageProducts.length > 8 ? ', …' : ''}. Those products will still be uploaded without images.
           </Alert> : null}
           <Typography variant="body2" sx={{ mb: 2 }}>{fileName} · Sheet “{preview.sheetName}” · {preview.sourceRows} source rows · {records.length} valid {mode}</Typography>
           {preview.errors.length ? <Alert severity="error" sx={{ mb: 2 }}>{preview.errors.length} rows need correction before upload: {preview.errors.slice(0, 8).map((item) => `Row ${item.row}: ${item.messages.join(', ')}`).join(' | ')}</Alert> : null}
