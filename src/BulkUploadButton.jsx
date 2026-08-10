@@ -4,14 +4,34 @@ import UploadFileIcon from '@mui/icons-material/UploadFile'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useNotify, useRefresh } from 'react-admin'
 import { upload as uploadBlob } from '@vercel/blob/client'
+import { useNavigate } from 'react-router-dom'
 
 const API_URL = '/api'
+
+const createLimiter = (limit) => {
+  let active = 0
+  const queue = []
+  const runNext = () => {
+    if (active >= limit || !queue.length) return
+    active += 1
+    const { task, resolve, reject } = queue.shift()
+    Promise.resolve().then(task).then(resolve, reject).finally(() => {
+      active -= 1
+      runNext()
+    })
+  }
+  return (task) => new Promise((resolve, reject) => {
+    queue.push({ task, resolve, reject })
+    runNext()
+  })
+}
 
 export function BulkUploadButton({ mode }) {
   const inputRef = useRef(null)
   const folderRef = useRef(null)
   const notify = useNotify()
   const refresh = useRefresh()
+  const navigate = useNavigate()
   const [preview, setPreview] = useState(null)
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -100,12 +120,13 @@ export function BulkUploadButton({ mode }) {
         }
       }
       const blobsByPath = new Map(existingBlobs.map((blob) => [blob.pathname, blob]))
+      const runImageTask = createLimiter(6)
       let reusedImages = 0
       let uploadedImages = 0
       const products = mode === 'products' ? await Promise.all(
         preview.products.map(async (product, productIndex) => {
           const matchedFiles = filesForReference(product.image_reference)
-          const imageBlobs = (await Promise.all(matchedFiles.map(async (file, fileIndex) => {
+          const imageBlobs = (await Promise.all(matchedFiles.map((file, fileIndex) => runImageTask(async () => {
             setUploadProgress(`Checking image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
             try {
               const pathname = await blobPathFor(product, file)
@@ -128,7 +149,7 @@ export function BulkUploadButton({ mode }) {
               imageFailures.push({ product: product.name, file: file.name, message: error.message })
               return null
             }
-          }))).filter(Boolean)
+          })))).filter(Boolean)
           const imageUrls = imageBlobs.length ? imageBlobs.map((blob) => blob.url) : product.image_urls
           return { ...product, image_url: imageUrls[0] || '', image_urls: imageUrls, image_blobs: imageBlobs }
         }),
@@ -190,7 +211,10 @@ export function BulkUploadButton({ mode }) {
           {records.length > 100 ? <Typography variant="caption">Showing the first 100 records.</Typography> : null}
         </> : null}
       </DialogContent>
-      <DialogActions><Button onClick={reset} disabled={uploading}>Cancel</Button><Button variant="contained" onClick={upload} disabled={!canUpload}>Upload {records?.length || 0} {mode}</Button></DialogActions>
+      <DialogActions>
+        {mode === 'products' ? <Button onClick={() => { reset(); navigate('/image-maintenance') }} disabled={uploading}>Review duplicate images</Button> : null}
+        <Button onClick={reset} disabled={uploading}>Cancel</Button><Button variant="contained" onClick={upload} disabled={!canUpload}>Upload {records?.length || 0} {mode}</Button>
+      </DialogActions>
     </Dialog>
   </>
 }

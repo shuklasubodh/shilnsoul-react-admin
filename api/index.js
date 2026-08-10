@@ -203,7 +203,14 @@ export default async function handler(request, response) {
         await deleteBlob(String(blobUrl))
         await ensureProductImagesTable(sql)
         const removedMappings = await sql.query('DELETE FROM product_images WHERE blob_url = $1 RETURNING id', [String(blobUrl)])
-        return json(response, 200, { deleted: true, removed_mappings: removedMappings.length })
+        const affectedProducts = await sql.query('SELECT id, image_url FROM products WHERE image_url LIKE $1', [`%${String(blobUrl)}%`])
+        let updatedProducts = 0
+        for (const product of affectedProducts) {
+          const remainingImages = productImages(product.image_url).filter((url) => url !== String(blobUrl))
+          await sql.query('UPDATE products SET image_url = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(remainingImages), product.id])
+          updatedProducts += 1
+        }
+        return json(response, 200, { deleted: true, removed_mappings: removedMappings.length, updated_products: updatedProducts })
       }
       return json(response, 405, { error: 'Method not allowed.' })
     }

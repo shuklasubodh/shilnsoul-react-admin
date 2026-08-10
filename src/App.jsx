@@ -14,6 +14,7 @@ import { orderResource } from './resources/orders'
 import { productResource } from './resources/products'
 import { userResource } from './resources/users'
 import { ProductImageMapping } from './ProductImageMapping'
+import { ImageMaintenance } from './ImageMaintenance'
 
 function App() {
   return (
@@ -41,7 +42,10 @@ function App() {
       <Resource name="categories" icon={CategoryIcon} {...categoryResource} />
       <Resource name="orders" icon={ShoppingCartIcon} {...orderResource} />
       <Resource name="users" icon={PeopleIcon} {...userResource} recordRepresentation={(record) => `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.email} />
-      <CustomRoutes><Route path="/product-images" element={<ProductImageMapping />} /></CustomRoutes>
+      <CustomRoutes>
+        <Route path="/product-images" element={<ProductImageMapping />} />
+        <Route path="/image-maintenance" element={<ImageMaintenance />} />
+      </CustomRoutes>
     </Admin>
   )
 }
