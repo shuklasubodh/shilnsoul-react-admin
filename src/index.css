@@ -202,6 +202,19 @@ body {
   padding: 12px 10px !important;
 }
 
+.admin-menu-section {
+  padding: 10px 14px 4px;
+  color: #294761;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase;
+}
+
+.admin-menu .admin-product-submenu {
+  padding-left: 20px;
+}
+
 .admin-menu .RaMenuItemLink-root {
   min-height: 38px;
   margin: 2px 0;

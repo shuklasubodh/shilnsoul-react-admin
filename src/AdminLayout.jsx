@@ -7,6 +7,7 @@ import {
 } from 'react-admin'
 import { Typography } from '@mui/material'
 import CollectionsIcon from '@mui/icons-material/Collections'
+import InventoryIcon from '@mui/icons-material/Inventory2'
 
 const AdminAppBar = (props) => (
   <AppBar {...props} className="admin-app-bar">
@@ -19,8 +20,9 @@ const AdminAppBar = (props) => (
 const AdminMenu = () => (
   <Menu className="admin-menu">
     <DashboardMenuItem />
-    <MenuItemLink to="/products" primaryText="Products" />
-    <MenuItemLink to="/product-images" primaryText="Product Images" leftIcon={<CollectionsIcon />} />
+    <Typography className="admin-menu-section">Products</Typography>
+    <MenuItemLink className="admin-product-submenu" to="/products" primaryText="Product Maintenance" leftIcon={<InventoryIcon />} />
+    <MenuItemLink className="admin-product-submenu" to="/product-images" primaryText="Product Image Mapping" leftIcon={<CollectionsIcon />} />
     <MenuItemLink to="/categories" primaryText="Categories" />
     <MenuItemLink to="/orders" primaryText="Orders" />
     <MenuItemLink to="/users" primaryText="Users" />

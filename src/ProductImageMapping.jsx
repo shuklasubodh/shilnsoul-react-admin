@@ -21,6 +21,7 @@ const apiFetch = async (path, options = {}) => {
 export function ProductImageMapping() {
   const notify = useNotify()
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [blobs, setBlobs] = useState([])
   const [mappings, setMappings] = useState([])
   const [drafts, setDrafts] = useState({})
@@ -28,16 +29,19 @@ export function ProductImageMapping() {
   const [savingUrl, setSavingUrl] = useState('')
   const [error, setError] = useState('')
   const [unmappedOnly, setUnmappedOnly] = useState(false)
+  const [folderFilter, setFolderFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const query = new URLSearchParams({ range: JSON.stringify([0, 9999]), sort: JSON.stringify(['name', 'ASC']), filter: '{}' })
-      const [productRows, blobResult, mappingRows] = await Promise.all([
-        apiFetch(`products?${query}`), apiFetch('blob-images'), apiFetch('product-images'),
+      const [productRows, categoryRows, blobResult, mappingRows] = await Promise.all([
+        apiFetch(`products?${query}`), apiFetch(`categories?${query}`), apiFetch('blob-images'), apiFetch('product-images'),
       ])
       setProducts(productRows)
+      setCategories(categoryRows)
       setBlobs(blobResult.blobs || [])
       setMappings(mappingRows)
       setDrafts(Object.fromEntries((blobResult.blobs || []).map((blob) => {
@@ -61,7 +65,23 @@ export function ProductImageMapping() {
   }, [load])
 
   const mappedByUrl = useMemo(() => new Map(mappings.map((mapping) => [mapping.blob_url, mapping])), [mappings])
-  const visibleBlobs = unmappedOnly ? blobs.filter((blob) => !mappedByUrl.has(blob.url)) : blobs
+  const productById = useMemo(() => new Map(products.map((product) => [String(product.id), product])), [products])
+  const folders = useMemo(() => [...new Set(blobs.map((blob) => blob.pathname.split('/').slice(0, -1).join('/')).filter(Boolean))].sort(), [blobs])
+  const visibleBlobs = useMemo(() => blobs.filter((blob) => {
+    const mapping = mappedByUrl.get(blob.url)
+    if (unmappedOnly && mapping) return false
+    const folder = blob.pathname.split('/').slice(0, -1).join('/')
+    if (folderFilter && folder !== folderFilter) return false
+    if (!categoryFilter) return true
+    const mappedProduct = mapping ? productById.get(String(mapping.product_id)) : null
+    if (String(mappedProduct?.category_id) === categoryFilter) return true
+    const category = categories.find((item) => String(item.id) === categoryFilter)
+    const pathParts = folder.toLowerCase().split('/')
+    return Boolean(category && [category.slug, category.name].filter(Boolean).some((value) => pathParts.includes(String(value).toLowerCase())))
+  }), [blobs, categories, categoryFilter, folderFilter, mappedByUrl, productById, unmappedOnly])
+  const filteredProducts = useMemo(() => categoryFilter
+    ? products.filter((product) => String(product.category_id) === categoryFilter)
+    : products, [categoryFilter, products])
   const updateDraft = (url, change) => setDrafts((current) => ({ ...current, [url]: { ...current[url], ...change } }))
 
   const save = async (blob) => {
@@ -109,7 +129,18 @@ export function ProductImageMapping() {
     {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography><strong>{blobs.length}</strong> Blob images · <strong>{mappings.length}</strong> mappings</Typography>
-      <FormControlLabel control={<Checkbox checked={unmappedOnly} onChange={(event) => setUnmappedOnly(event.target.checked)} />} label="Show unmapped images only" />
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 1.5 }}>
+        <Select size="small" displayEmpty value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)} sx={{ minWidth: 260 }} inputProps={{ 'aria-label': 'Filter by folder name' }}>
+          <MenuItem value=""><em>All folders</em></MenuItem>
+          {folders.map((folder) => <MenuItem key={folder} value={folder}>{folder}</MenuItem>)}
+        </Select>
+        <Select size="small" displayEmpty value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} sx={{ minWidth: 220 }} inputProps={{ 'aria-label': 'Filter by category' }}>
+          <MenuItem value=""><em>All categories</em></MenuItem>
+          {categories.map((category) => <MenuItem key={category.id} value={String(category.id)}>{category.name}</MenuItem>)}
+        </Select>
+        <FormControlLabel control={<Checkbox checked={unmappedOnly} onChange={(event) => setUnmappedOnly(event.target.checked)} />} label="Show unmapped images only" />
+        <Typography variant="body2" color="text.secondary">{visibleBlobs.length} shown</Typography>
+      </Box>
     </Paper>
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 260 }}><CircularProgress /></Box> :
       <Paper variant="outlined" sx={{ overflow: 'auto' }}><Table stickyHeader size="small">
@@ -122,7 +153,7 @@ export function ProductImageMapping() {
             <TableCell><a href={blob.url} target="_blank" rel="noreferrer"><img className="blob-preview" src={blob.url} alt={blob.pathname} /></a></TableCell>
             <TableCell><Typography variant="body2">{blob.pathname}</Typography>{mapping ? <Typography variant="caption" color="success.main">Mapped to {mapping.product_name}</Typography> : <Typography variant="caption" color="warning.main">Unmapped</Typography>}</TableCell>
             <TableCell><Select size="small" displayEmpty value={draft.product_id || ''} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
-              <MenuItem value=""><em>Select product</em></MenuItem>{products.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
+              <MenuItem value=""><em>Select product</em></MenuItem>{filteredProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
             </Select></TableCell>
             <TableCell><TextField size="small" type="number" value={draft.sort_order ?? 0} onChange={(event) => updateDraft(blob.url, { sort_order: event.target.value })} slotProps={{ htmlInput: { min: 0 } }} sx={{ width: 80 }} /></TableCell>
             <TableCell><Checkbox checked={Boolean(draft.is_primary)} onChange={(event) => updateDraft(blob.url, { is_primary: event.target.checked })} /></TableCell>
