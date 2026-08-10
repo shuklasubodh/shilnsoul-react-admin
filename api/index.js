@@ -136,7 +136,11 @@ const allProductBlobs = async () => {
 }
 
 const syncProductImageUrls = async (sql, productId) => {
-  const rows = await sql.query('SELECT blob_url FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [productId])
+  let rows = await sql.query('SELECT id, blob_url, is_primary FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [productId])
+  if (rows.length && !rows.some((row) => row.is_primary)) {
+    await sql.query('UPDATE product_images SET is_primary = (id = $1), updated_at = NOW() WHERE product_id = $2', [rows[0].id, productId])
+    rows = await sql.query('SELECT id, blob_url, is_primary FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [productId])
+  }
   const urls = [...new Set(rows.map((row) => row.blob_url).filter((url) => validBlobUrl(url)))]
   await sql.query('UPDATE products SET image_url = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(urls), productId])
   return urls
