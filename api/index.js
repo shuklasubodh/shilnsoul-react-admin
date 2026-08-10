@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { handleUpload } from '@vercel/blob/client'
+import { list as listBlobs } from '@vercel/blob'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -71,6 +72,31 @@ const publicRecord = (resourceName, record) => {
   if (resourceName !== 'products' || !record) return record
   const images = productImages(record.image_url)
   return { ...record, image_url: images[0] || '', images }
+}
+
+const validBlobUrl = (value) => {
+  try {
+    const url = new URL(String(value))
+    return url.protocol === 'https:' && url.hostname.endsWith('.blob.vercel-storage.com')
+  } catch { return false }
+}
+
+const ensureProductImagesTable = async (sql) => {
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS product_images (
+      id BIGSERIAL PRIMARY KEY,
+      product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      blob_url TEXT NOT NULL,
+      blob_pathname TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
+      is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (product_id, blob_url)
+    )
+  `)
+  await sql.query('CREATE INDEX IF NOT EXISTS product_images_product_id_idx ON product_images(product_id, sort_order, id)')
+  await sql.query('CREATE UNIQUE INDEX IF NOT EXISTS product_images_one_primary_idx ON product_images(product_id) WHERE is_primary')
 }
 
 const databaseError = (response, error) => {
@@ -163,6 +189,48 @@ export default async function handler(request, response) {
       if (session.role !== 'ADMIN') return json(response, 403, { error: 'Administrator access is required.' })
     } catch {
       return json(response, 401, { error: 'Authentication is required.' })
+    }
+
+    if (resourceName === 'blob-images' && !id && !extra.length && request.method === 'GET') {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) return json(response, 503, { error: 'Connect a Vercel Blob store to list product images.' })
+      const result = await listBlobs({ prefix: 'products/', limit: 1000, cursor: request.query.cursor || undefined })
+      return json(response, 200, result)
+    }
+
+    if (resourceName === 'product-images' && !extra.length) {
+      await ensureProductImagesTable(sql)
+      if (request.method === 'GET' && !id) {
+        const rows = await sql.query(`
+          SELECT pi.*, p.name AS product_name, p.sku AS product_sku
+          FROM product_images pi
+          JOIN products p ON p.id = pi.product_id
+          ORDER BY p.name, pi.sort_order, pi.id
+        `)
+        return json(response, 200, rows)
+      }
+      if (request.method === 'POST' && !id) {
+        const { product_id: productId, blob_url: blobUrl, blob_pathname: blobPathname = '', sort_order: sortOrder = 0, is_primary: isPrimary = false } = request.body || {}
+        if (!positiveId(productId) || !validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid product and public Vercel Blob URL are required.' })
+        const products = await sql.query('SELECT id FROM products WHERE id = $1', [productId])
+        if (!products.length) return json(response, 404, { error: 'Product not found.' })
+        if (isPrimary) await sql.query('UPDATE product_images SET is_primary = FALSE, updated_at = NOW() WHERE product_id = $1', [productId])
+        const rows = await sql.query(`
+          INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (product_id, blob_url) DO UPDATE SET
+            blob_pathname = EXCLUDED.blob_pathname,
+            sort_order = EXCLUDED.sort_order,
+            is_primary = EXCLUDED.is_primary,
+            updated_at = NOW()
+          RETURNING *
+        `, [productId, String(blobUrl), String(blobPathname), Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isPrimary)])
+        return json(response, 200, rows[0])
+      }
+      if (request.method === 'DELETE' && id && positiveId(id)) {
+        const rows = await sql.query('DELETE FROM product_images WHERE id = $1 RETURNING id', [id])
+        return rows.length ? json(response, 200, rows[0]) : json(response, 404, { error: 'Image mapping not found.' })
+      }
+      return json(response, 405, { error: 'Method not allowed.' })
     }
 
     if (resourceName === 'bulk-import' && !id && !extra.length && request.method === 'POST') {

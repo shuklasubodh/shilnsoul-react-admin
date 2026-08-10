@@ -1,4 +1,5 @@
-import { Admin, Resource } from 'react-admin'
+import { Admin, CustomRoutes, Resource } from 'react-admin'
+import { Route } from 'react-router-dom'
 import CategoryIcon from '@mui/icons-material/Category'
 import InventoryIcon from '@mui/icons-material/Inventory2'
 import PeopleIcon from '@mui/icons-material/People'
@@ -12,6 +13,7 @@ import { categoryResource } from './resources/categories'
 import { orderResource } from './resources/orders'
 import { productResource } from './resources/products'
 import { userResource } from './resources/users'
+import { ProductImageMapping } from './ProductImageMapping'
 
 function App() {
   return (
@@ -39,6 +41,7 @@ function App() {
       <Resource name="categories" icon={CategoryIcon} {...categoryResource} />
       <Resource name="orders" icon={ShoppingCartIcon} {...orderResource} />
       <Resource name="users" icon={PeopleIcon} {...userResource} recordRepresentation={(record) => `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.email} />
+      <CustomRoutes><Route path="/product-images" element={<ProductImageMapping />} /></CustomRoutes>
     </Admin>
   )
 }

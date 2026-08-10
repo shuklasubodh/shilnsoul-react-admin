@@ -332,6 +332,27 @@ body {
   max-width: 900px;
 }
 
+.image-mapping-page {
+  width: 100%;
+}
+
+.image-mapping-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.blob-preview {
+  display: block;
+  width: 84px;
+  height: 84px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #edf1f4;
+}
+
 .admin-dashboard h1 {
   margin: 0 0 12px;
   color: #183650;

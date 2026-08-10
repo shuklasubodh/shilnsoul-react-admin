@@ -6,6 +6,7 @@ import {
   MenuItemLink,
 } from 'react-admin'
 import { Typography } from '@mui/material'
+import CollectionsIcon from '@mui/icons-material/Collections'
 
 const AdminAppBar = (props) => (
   <AppBar {...props} className="admin-app-bar">
@@ -19,6 +20,7 @@ const AdminMenu = () => (
   <Menu className="admin-menu">
     <DashboardMenuItem />
     <MenuItemLink to="/products" primaryText="Products" />
+    <MenuItemLink to="/product-images" primaryText="Product Images" leftIcon={<CollectionsIcon />} />
     <MenuItemLink to="/categories" primaryText="Categories" />
     <MenuItemLink to="/orders" primaryText="Orders" />
     <MenuItemLink to="/users" primaryText="Users" />
