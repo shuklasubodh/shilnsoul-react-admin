@@ -69,17 +69,20 @@ export function ProductImageMapping() {
   }, [load])
 
   const mappedByUrl = useMemo(() => new Map(mappings.map((mapping) => [mapping.blob_url, mapping])), [mappings])
+  const mappingByProductUrl = useMemo(() => new Map(mappings.map((mapping) => [`${mapping.product_id}|${mapping.blob_url}`, mapping])), [mappings])
   const folders = useMemo(() => [...new Set(blobs.map((blob) => blob.pathname.split('/').slice(0, -1).join('/')).filter(Boolean))].sort(), [blobs])
   const visibleBlobs = useMemo(() => blobs.filter((blob) => {
     const mapping = mappedByUrl.get(blob.url)
     if (unmappedOnly && mapping) return false
+    if (productFilter && !unmappedOnly && !mappingByProductUrl.has(`${productFilter}|${blob.url}`)) return false
     const folder = blob.pathname.split('/').slice(0, -1).join('/')
     return !folderFilter || folder === folderFilter
-  }), [blobs, folderFilter, mappedByUrl, unmappedOnly])
+  }), [blobs, folderFilter, mappedByUrl, mappingByProductUrl, productFilter, unmappedOnly])
   const detailProducts = useMemo(() => productFilter
     ? products.filter((product) => String(product.id) === productFilter)
     : products, [productFilter, products])
   const selectedUrlSet = useMemo(() => new Set(selectedUrls), [selectedUrls])
+  const selectedProduct = useMemo(() => products.find((product) => String(product.id) === productFilter), [productFilter, products])
   const selectedVisibleCount = visibleBlobs.filter((blob) => selectedUrlSet.has(blob.url)).length
   const allVisibleSelected = visibleBlobs.length > 0 && selectedVisibleCount === visibleBlobs.length
   const updateDraft = (url, change) => setDrafts((current) => ({ ...current, [url]: { ...current[url], ...change } }))
@@ -238,6 +241,11 @@ export function ProductImageMapping() {
           {deletingMultiple ? 'Deleting…' : `Delete selected Blobs (${selectedUrls.length})`}
         </Button>
       </Box>
+      {selectedProduct ? <Alert severity="info" sx={{ mt: 1.5 }}>
+        {unmappedOnly
+          ? `Showing ${visibleBlobs.length} unmapped images available to assign to ${selectedProduct.name} (${selectedProduct.sku}).`
+          : `${visibleBlobs.length} images are mapped to ${selectedProduct.name} (${selectedProduct.sku}).`}
+      </Alert> : null}
     </Paper>
     {!loading && unmappedOnly && visibleBlobs.length === 0 ? <Alert severity="info" sx={{ mb: 2 }} action={<Button onClick={() => setUnmappedOnly(false)}>Show all images</Button>}>
       All listed Blob images are currently mapped. Turn off the unmapped-only filter to display them.
@@ -248,7 +256,7 @@ export function ProductImageMapping() {
         <TableBody>{visibleBlobs.map((blob) => {
           const draft = drafts[blob.url] || {}
           const selectedProductId = productFilter || draft.product_id || ''
-          const mapping = mappedByUrl.get(blob.url)
+          const mapping = productFilter ? mappingByProductUrl.get(`${productFilter}|${blob.url}`) : mappedByUrl.get(blob.url)
           const saving = savingUrl === blob.url
           return <TableRow key={blob.url}>
             <TableCell padding="checkbox"><Checkbox checked={selectedUrlSet.has(blob.url)} onChange={(event) => setSelectedUrls((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} inputProps={{ 'aria-label': `Select ${blob.pathname}` }} /></TableCell>
