@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { handleUpload } from '@vercel/blob/client'
-import { del as deleteBlob, list as listBlobs } from '@vercel/blob'
+import { del as deleteBlob, get as getBlob, list as listBlobs } from '@vercel/blob'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -239,6 +239,19 @@ export default async function handler(request, response) {
         return json(response, 200, { deleted: true, removed_mappings: removedMappings.length, updated_products: updatedProducts })
       }
       return json(response, 405, { error: 'Method not allowed.' })
+    }
+
+    if (resourceName === 'blob-content' && !id && !extra.length && request.method === 'GET') {
+      const blobUrl = String(request.query.url || '')
+      if (!validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid Vercel Blob URL is required.' })
+      const access = blobUrl.includes('.private.blob.vercel-storage.com') ? 'private' : 'public'
+      const blobResult = await getBlob(blobUrl, { access })
+      if (!blobResult) return json(response, 404, { error: 'Blob image not found.' })
+      if (blobResult.statusCode === 304) return response.status(304).end()
+      const bytes = Buffer.from(await new Response(blobResult.stream).arrayBuffer())
+      response.setHeader('Content-Type', blobResult.blob.contentType || 'application/octet-stream')
+      response.setHeader('Cache-Control', 'private, max-age=300')
+      return response.status(200).send(bytes)
     }
 
     if (resourceName === 'product-images' && !extra.length) {

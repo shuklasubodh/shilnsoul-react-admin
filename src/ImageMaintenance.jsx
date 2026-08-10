@@ -4,6 +4,7 @@ import { Alert, Box, Button, Checkbox, Chip, CircularProgress, LinearProgress, P
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import ImageSearchIcon from '@mui/icons-material/ImageSearch'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
 
 const apiFetch = async (path, options = {}) => {
   const response = await fetch(`/api/${path}`, {
@@ -29,7 +30,9 @@ const parallelMap = async (items, limit, task) => {
 }
 
 const imageFingerprint = async (blob) => {
-  const response = await fetch(blob.url)
+  const response = await fetch(`/api/blob-content?url=${encodeURIComponent(blob.url)}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
+  })
   if (!response.ok) throw new Error(`Could not read ${blob.pathname}`)
   const bitmap = await createImageBitmap(await response.blob())
   const aspect = bitmap.width / bitmap.height
@@ -162,7 +165,7 @@ export function ImageMaintenance() {
       </Box>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 1.5 }}>
         {group.map((blob) => { const mapping = mappingByUrl.get(blob.url); return <Box key={blob.url} sx={{ border: '1px solid #dbe3ea', p: 1, minWidth: 0 }}>
-          <Box component="img" src={blob.url} alt={blob.pathname} loading="lazy" sx={{ width: '100%', height: 130, objectFit: 'contain', bgcolor: '#f4f6f8' }} />
+          <AuthenticatedBlobImage blobUrl={blob.url} alt={blob.pathname} style={{ width: '100%', height: 130, objectFit: 'contain', background: '#f4f6f8' }} />
           <Box sx={{ display: 'flex', alignItems: 'center' }}><Checkbox checked={selected.includes(blob.url)} onChange={(event) => setSelected((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} />
             <Typography variant="caption" title={blob.pathname} noWrap>{blob.pathname}</Typography></Box>
           <Box sx={{ display: 'flex', gap: .5, flexWrap: 'wrap' }}>{blob.url === keeper.url ? <Chip size="small" color="success" label="Suggested keeper" /> : null}{mapping ? <Chip size="small" label={`${mapping.product_name || `Product ${mapping.product_id}`}${mapping.is_primary ? ' · primary' : ''}`} /> : <Chip size="small" variant="outlined" label="Unmapped" />}</Box>

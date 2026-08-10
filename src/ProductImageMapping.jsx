@@ -7,6 +7,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
 
 const apiFetch = async (path, options = {}) => {
   const token = localStorage.getItem('admin_token')
@@ -232,7 +233,7 @@ export function ProductImageMapping() {
           const saving = savingUrl === blob.url
           return <TableRow key={blob.url}>
             <TableCell padding="checkbox"><Checkbox checked={selectedUrlSet.has(blob.url)} onChange={(event) => setSelectedUrls((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} inputProps={{ 'aria-label': `Select ${blob.pathname}` }} /></TableCell>
-            <TableCell><a href={blob.url} target="_blank" rel="noreferrer"><img className="blob-preview" src={blob.url} alt={blob.pathname} /></a></TableCell>
+            <TableCell><AuthenticatedBlobImage className="blob-preview" blobUrl={blob.url} alt={blob.pathname} /></TableCell>
             <TableCell><Typography variant="body2">{blob.pathname}</Typography>{mapping ? <Typography variant="caption" color="success.main">Mapped to {mapping.product_name}</Typography> : <Typography variant="caption" color="warning.main">Unmapped</Typography>}</TableCell>
             <TableCell><Select size="small" displayEmpty value={selectedProductId} disabled={Boolean(productFilter)} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
               <MenuItem value=""><em>Select product</em></MenuItem>{detailProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
