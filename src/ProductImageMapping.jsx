@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Title, useNotify } from 'react-admin'
 import {
   Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Paper,
-  Select, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Select, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import RefreshIcon from '@mui/icons-material/Refresh'
 
 const apiFetch = async (path, options = {}) => {
@@ -21,34 +22,33 @@ const apiFetch = async (path, options = {}) => {
 export function ProductImageMapping() {
   const notify = useNotify()
   const [products, setProducts] = useState([])
-  const [categories, setCategories] = useState([])
   const [blobs, setBlobs] = useState([])
   const [mappings, setMappings] = useState([])
   const [drafts, setDrafts] = useState({})
   const [loading, setLoading] = useState(true)
   const [savingUrl, setSavingUrl] = useState('')
+  const [savingMultiple, setSavingMultiple] = useState(false)
+  const [selectedUrls, setSelectedUrls] = useState([])
   const [error, setError] = useState('')
   const [unmappedOnly, setUnmappedOnly] = useState(false)
   const [folderFilter, setFolderFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [productFilter, setProductFilter] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const query = new URLSearchParams({ range: JSON.stringify([0, 9999]), sort: JSON.stringify(['name', 'ASC']), filter: '{}' })
-      const [productRows, categoryRows, blobResult, mappingRows] = await Promise.all([
-        apiFetch(`products?${query}`), apiFetch(`categories?${query}`), apiFetch('blob-images'), apiFetch('product-images'),
+      const [productRows, blobResult, mappingRows] = await Promise.all([
+        apiFetch(`products?${query}`), apiFetch('blob-images'), apiFetch('product-images'),
       ])
       setProducts(productRows)
-      setCategories(categoryRows)
       setBlobs(blobResult.blobs || [])
       setMappings(mappingRows)
       setDrafts(Object.fromEntries((blobResult.blobs || []).map((blob) => {
         const mapping = mappingRows.find((item) => item.blob_url === blob.url)
         return [blob.url, {
           product_id: mapping ? String(mapping.product_id) : '',
-          sort_order: mapping?.sort_order ?? 0,
           is_primary: mapping?.is_primary ?? false,
         }]
       })))
@@ -65,43 +65,65 @@ export function ProductImageMapping() {
   }, [load])
 
   const mappedByUrl = useMemo(() => new Map(mappings.map((mapping) => [mapping.blob_url, mapping])), [mappings])
-  const productById = useMemo(() => new Map(products.map((product) => [String(product.id), product])), [products])
   const folders = useMemo(() => [...new Set(blobs.map((blob) => blob.pathname.split('/').slice(0, -1).join('/')).filter(Boolean))].sort(), [blobs])
   const visibleBlobs = useMemo(() => blobs.filter((blob) => {
     const mapping = mappedByUrl.get(blob.url)
     if (unmappedOnly && mapping) return false
     const folder = blob.pathname.split('/').slice(0, -1).join('/')
-    if (folderFilter && folder !== folderFilter) return false
-    if (!categoryFilter) return true
-    const mappedProduct = mapping ? productById.get(String(mapping.product_id)) : null
-    if (String(mappedProduct?.category_id) === categoryFilter) return true
-    const category = categories.find((item) => String(item.id) === categoryFilter)
-    const pathParts = folder.toLowerCase().split('/')
-    return Boolean(category && [category.slug, category.name].filter(Boolean).some((value) => pathParts.includes(String(value).toLowerCase())))
-  }), [blobs, categories, categoryFilter, folderFilter, mappedByUrl, productById, unmappedOnly])
-  const filteredProducts = useMemo(() => categoryFilter
-    ? products.filter((product) => String(product.category_id) === categoryFilter)
-    : products, [categoryFilter, products])
+    return !folderFilter || folder === folderFilter
+  }), [blobs, folderFilter, mappedByUrl, unmappedOnly])
+  const detailProducts = useMemo(() => productFilter
+    ? products.filter((product) => String(product.id) === productFilter)
+    : products, [productFilter, products])
+  const selectedUrlSet = useMemo(() => new Set(selectedUrls), [selectedUrls])
+  const selectedVisibleCount = visibleBlobs.filter((blob) => selectedUrlSet.has(blob.url)).length
+  const allVisibleSelected = visibleBlobs.length > 0 && selectedVisibleCount === visibleBlobs.length
   const updateDraft = (url, change) => setDrafts((current) => ({ ...current, [url]: { ...current[url], ...change } }))
+  const toggleAllVisible = (checked) => setSelectedUrls((current) => {
+    const visibleUrls = new Set(visibleBlobs.map((blob) => blob.url))
+    return checked ? [...new Set([...current, ...visibleUrls])] : current.filter((url) => !visibleUrls.has(url))
+  })
+  const saveMapping = (blob, productId) => apiFetch('product-images', {
+    method: 'POST',
+    body: JSON.stringify({
+      product_id: Number(productId), blob_url: blob.url, blob_pathname: blob.pathname,
+      sort_order: 0, is_primary: Boolean(drafts[blob.url]?.is_primary),
+    }),
+  })
 
   const save = async (blob) => {
     const draft = drafts[blob.url]
-    if (!draft?.product_id) return notify('Select a product first.', { type: 'warning' })
+    const productId = productFilter || draft?.product_id
+    if (!productId) return notify('Select a product first.', { type: 'warning' })
     setSavingUrl(blob.url)
     try {
-      await apiFetch('product-images', {
-        method: 'POST',
-        body: JSON.stringify({
-          product_id: Number(draft.product_id), blob_url: blob.url, blob_pathname: blob.pathname,
-          sort_order: Number(draft.sort_order) || 0, is_primary: Boolean(draft.is_primary),
-        }),
-      })
+      await saveMapping(blob, productId)
       notify('Image mapped to product.', { type: 'success' })
       await load()
     } catch (saveError) {
       notify(saveError.message, { type: 'error' })
     } finally {
       setSavingUrl('')
+    }
+  }
+
+  const saveSelected = async () => {
+    const selectedBlobs = blobs.filter((blob) => selectedUrls.includes(blob.url))
+    const missingProduct = selectedBlobs.some((blob) => !(productFilter || drafts[blob.url]?.product_id))
+    if (!selectedBlobs.length) return notify('Select at least one image.', { type: 'warning' })
+    if (missingProduct) return notify('Select a product for every selected image.', { type: 'warning' })
+    setSavingMultiple(true)
+    try {
+      for (const blob of selectedBlobs) {
+        await saveMapping(blob, productFilter || drafts[blob.url].product_id)
+      }
+      notify(`${selectedBlobs.length} images mapped to products.`, { type: 'success' })
+      setSelectedUrls([])
+      await load()
+    } catch (saveError) {
+      notify(saveError.message, { type: 'error' })
+    } finally {
+      setSavingMultiple(false)
     }
   }
 
@@ -115,6 +137,25 @@ export function ProductImageMapping() {
       await load()
     } catch (removeError) {
       notify(removeError.message, { type: 'error' })
+    } finally {
+      setSavingUrl('')
+    }
+  }
+
+  const deleteBrokenImage = async (blob) => {
+    const confirmed = window.confirm(`Permanently delete this image from Vercel Blob and remove its database mapping?\n\n${blob.pathname}`)
+    if (!confirmed) return
+    setSavingUrl(blob.url)
+    try {
+      const result = await apiFetch('blob-images', {
+        method: 'DELETE',
+        body: JSON.stringify({ blob_url: blob.url }),
+      })
+      setSelectedUrls((current) => current.filter((url) => url !== blob.url))
+      notify(`Broken image deleted${result.removed_mappings ? `; ${result.removed_mappings} database mapping removed` : ''}.`, { type: 'success' })
+      await load()
+    } catch (deleteError) {
+      notify(deleteError.message, { type: 'error' })
     } finally {
       setSavingUrl('')
     }
@@ -134,30 +175,34 @@ export function ProductImageMapping() {
           <MenuItem value=""><em>All folders</em></MenuItem>
           {folders.map((folder) => <MenuItem key={folder} value={folder}>{folder}</MenuItem>)}
         </Select>
-        <Select size="small" displayEmpty value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} sx={{ minWidth: 220 }} inputProps={{ 'aria-label': 'Filter by category' }}>
-          <MenuItem value=""><em>All categories</em></MenuItem>
-          {categories.map((category) => <MenuItem key={category.id} value={String(category.id)}>{category.name}</MenuItem>)}
+        <Select size="small" displayEmpty value={productFilter} onChange={(event) => setProductFilter(event.target.value)} sx={{ minWidth: 280 }} inputProps={{ 'aria-label': 'Filter by product' }}>
+          <MenuItem value=""><em>All products</em></MenuItem>
+          {products.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
         </Select>
         <FormControlLabel control={<Checkbox checked={unmappedOnly} onChange={(event) => setUnmappedOnly(event.target.checked)} />} label="Show unmapped images only" />
         <Typography variant="body2" color="text.secondary">{visibleBlobs.length} shown</Typography>
+        <Button variant="contained" onClick={saveSelected} disabled={savingMultiple || selectedUrls.length === 0}>
+          {savingMultiple ? 'Saving…' : `Save selected (${selectedUrls.length})`}
+        </Button>
       </Box>
     </Paper>
     {loading ? <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 260 }}><CircularProgress /></Box> :
       <Paper variant="outlined" sx={{ overflow: 'auto' }}><Table stickyHeader size="small">
-        <TableHead><TableRow><TableCell>Preview</TableCell><TableCell>Blob pathname</TableCell><TableCell>Product</TableCell><TableCell>Order</TableCell><TableCell>Primary</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
+        <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={selectedVisibleCount > 0 && !allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} inputProps={{ 'aria-label': 'Select all visible images' }} /></TableCell><TableCell>Preview</TableCell><TableCell>Blob pathname</TableCell><TableCell>Product</TableCell><TableCell>Primary</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
         <TableBody>{visibleBlobs.map((blob) => {
           const draft = drafts[blob.url] || {}
+          const selectedProductId = productFilter || draft.product_id || ''
           const mapping = mappedByUrl.get(blob.url)
           const saving = savingUrl === blob.url
           return <TableRow key={blob.url}>
+            <TableCell padding="checkbox"><Checkbox checked={selectedUrlSet.has(blob.url)} onChange={(event) => setSelectedUrls((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} inputProps={{ 'aria-label': `Select ${blob.pathname}` }} /></TableCell>
             <TableCell><a href={blob.url} target="_blank" rel="noreferrer"><img className="blob-preview" src={blob.url} alt={blob.pathname} /></a></TableCell>
             <TableCell><Typography variant="body2">{blob.pathname}</Typography>{mapping ? <Typography variant="caption" color="success.main">Mapped to {mapping.product_name}</Typography> : <Typography variant="caption" color="warning.main">Unmapped</Typography>}</TableCell>
-            <TableCell><Select size="small" displayEmpty value={draft.product_id || ''} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
-              <MenuItem value=""><em>Select product</em></MenuItem>{filteredProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
+            <TableCell><Select size="small" displayEmpty value={selectedProductId} disabled={Boolean(productFilter)} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
+              <MenuItem value=""><em>Select product</em></MenuItem>{detailProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
             </Select></TableCell>
-            <TableCell><TextField size="small" type="number" value={draft.sort_order ?? 0} onChange={(event) => updateDraft(blob.url, { sort_order: event.target.value })} slotProps={{ htmlInput: { min: 0 } }} sx={{ width: 80 }} /></TableCell>
             <TableCell><Checkbox checked={Boolean(draft.is_primary)} onChange={(event) => updateDraft(blob.url, { is_primary: event.target.checked })} /></TableCell>
-            <TableCell><Button onClick={() => save(blob)} disabled={saving || !draft.product_id}>{saving ? 'Saving…' : 'Save'}</Button>{mapping ? <Button color="error" startIcon={<DeleteIcon />} onClick={() => remove(blob)} disabled={saving}>Unmap</Button> : null}</TableCell>
+            <TableCell><Button onClick={() => save(blob)} disabled={saving || !selectedProductId}>{saving ? 'Saving…' : 'Save'}</Button>{mapping ? <Button color="warning" startIcon={<DeleteIcon />} onClick={() => remove(blob)} disabled={saving}>Unmap</Button> : null}<Button color="error" startIcon={<DeleteForeverIcon />} onClick={() => deleteBrokenImage(blob)} disabled={saving}>Delete blob</Button></TableCell>
           </TableRow>
         })}</TableBody>
       </Table></Paper>}

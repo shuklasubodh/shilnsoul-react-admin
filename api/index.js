@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { handleUpload } from '@vercel/blob/client'
-import { list as listBlobs } from '@vercel/blob'
+import { del as deleteBlob, list as listBlobs } from '@vercel/blob'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -191,10 +191,21 @@ export default async function handler(request, response) {
       return json(response, 401, { error: 'Authentication is required.' })
     }
 
-    if (resourceName === 'blob-images' && !id && !extra.length && request.method === 'GET') {
-      if (!process.env.BLOB_READ_WRITE_TOKEN) return json(response, 503, { error: 'Connect a Vercel Blob store to list product images.' })
-      const result = await listBlobs({ prefix: 'products/', limit: 1000, cursor: request.query.cursor || undefined })
-      return json(response, 200, result)
+    if (resourceName === 'blob-images' && !id && !extra.length) {
+      if (!process.env.BLOB_READ_WRITE_TOKEN) return json(response, 503, { error: 'Connect a Vercel Blob store to manage product images.' })
+      if (request.method === 'GET') {
+        const result = await listBlobs({ prefix: 'products/', limit: 1000, cursor: request.query.cursor || undefined })
+        return json(response, 200, result)
+      }
+      if (request.method === 'DELETE') {
+        const blobUrl = request.body?.blob_url
+        if (!validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid Vercel Blob URL is required.' })
+        await deleteBlob(String(blobUrl))
+        await ensureProductImagesTable(sql)
+        const removedMappings = await sql.query('DELETE FROM product_images WHERE blob_url = $1 RETURNING id', [String(blobUrl)])
+        return json(response, 200, { deleted: true, removed_mappings: removedMappings.length })
+      }
+      return json(response, 405, { error: 'Method not allowed.' })
     }
 
     if (resourceName === 'product-images' && !extra.length) {
