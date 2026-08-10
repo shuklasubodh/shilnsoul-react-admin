@@ -145,6 +145,11 @@ export function BulkUploadButton({ mode }) {
       const runImageTask = createLimiter(6)
       let reusedImages = 0
       let uploadedImages = 0
+      let unmappedUploadedImages = 0
+      let unmappedReusedImages = 0
+      const matchedFileSet = new Set(mode === 'products'
+        ? preview.products.flatMap((product) => filesForReference(product.image_reference))
+        : [])
       const products = mode === 'products' ? await Promise.all(
         preview.products.map(async (product, productIndex) => {
           const matchedFiles = filesForReference(product.image_reference)
@@ -176,6 +181,28 @@ export function BulkUploadButton({ mode }) {
           return { ...product, image_url: imageUrls[0] || '', image_urls: imageUrls, image_blobs: imageBlobs }
         }),
       ) : []
+      const unmappedFiles = mode === 'products' ? imageFiles.filter((file) => !matchedFileSet.has(file)) : []
+      await Promise.all(unmappedFiles.map((file, fileIndex) => runImageTask(async () => {
+        setUploadProgress(`Uploading unmatched image ${fileIndex + 1} of ${unmappedFiles.length} for manual mapping`)
+        try {
+          const pathname = await blobPathFor({ slug: 'unmapped' }, file)
+          const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, { slug: 'unmapped' }, file)
+          if (existingBlob) {
+            unmappedReusedImages += 1
+            return
+          }
+          const blob = await uploadBlob(pathname, file, {
+            access: 'public',
+            handleUploadUrl: `${API_URL}/blob-upload`,
+            clientPayload: JSON.stringify({ adminToken: token }),
+          })
+          blobsByPath.set(blob.pathname, blob)
+          existingBlobs.push({ ...blob, size: file.size })
+          unmappedUploadedImages += 1
+        } catch (error) {
+          imageFailures.push({ product: 'Unmapped images', file: file.name, message: error.message })
+        }
+      })))
       const response = await fetch(`${API_URL}/bulk-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -186,7 +213,7 @@ export function BulkUploadButton({ mode }) {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Bulk upload failed.')
-      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated; ${uploadedImages} new images uploaded; ${reusedImages} existing images reused${unmatched.length ? `; images missing for ${unmatched.length} products` : ''}${imageFailures.length ? `; ${imageFailures.length} image uploads failed` : ''}` : ''}.`, { type: imageFailures.length ? 'warning' : 'success' })
+      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated; ${uploadedImages} mapped images uploaded; ${reusedImages} mapped images reused; ${unmappedUploadedImages} unmatched images uploaded for manual mapping; ${unmappedReusedImages} unmatched images reused${unmatched.length ? `; images not automatically matched for ${unmatched.length} products` : ''}${imageFailures.length ? `; ${imageFailures.length} image uploads failed` : ''}` : ''}.`, { type: imageFailures.length ? 'warning' : 'success' })
       reset()
       refresh()
     } catch (error) {
@@ -218,7 +245,7 @@ export function BulkUploadButton({ mode }) {
             action={<Button startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={uploading}>Select image folder</Button>}
           >{imageFiles.length ? `${imageFiles.length} image files selected. Folder references will be matched during upload.` : 'The workbook contains local image paths. Select their common parent folder to upload all product images.'}</Alert> : null}
           {unmatchedImageProducts.length ? <Alert severity="warning" sx={{ mb: 2 }}>
-            No images matched {unmatchedImageProducts.length} products: {unmatchedImageProducts.slice(0, 8).map((product) => product.image_reference).join(', ')}{unmatchedImageProducts.length > 8 ? ', …' : ''}. Those products will still be uploaded without images.
+            No images matched {unmatchedImageProducts.length} products: {unmatchedImageProducts.slice(0, 8).map((product) => product.image_reference).join(', ')}{unmatchedImageProducts.length > 8 ? ', …' : ''}. The products will be uploaded without automatic image mappings; unmatched selected files will still upload under products/unmapped for manual mapping.
           </Alert> : null}
           <Typography variant="body2" sx={{ mb: 2 }}>{fileName} · Sheet “{preview.sheetName}” · {preview.sourceRows} source rows · {records.length} valid {mode}</Typography>
           {preview.errors.length ? <Alert severity="error" sx={{ mb: 2 }}>{preview.errors.length} rows need correction before upload: {preview.errors.slice(0, 8).map((item) => `Row ${item.row}: ${item.messages.join(', ')}`).join(' | ')}</Alert> : null}
