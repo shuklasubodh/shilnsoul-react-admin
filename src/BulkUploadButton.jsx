@@ -102,22 +102,17 @@ export function BulkUploadButton({ mode }) {
       const blobsByPath = new Map(existingBlobs.map((blob) => [blob.pathname, blob]))
       let reusedImages = 0
       let uploadedImages = 0
-      const products = []
-      if (mode === 'products') {
-        for (let productIndex = 0; productIndex < preview.products.length; productIndex += 1) {
-          const product = preview.products[productIndex]
+      const products = mode === 'products' ? await Promise.all(
+        preview.products.map(async (product, productIndex) => {
           const matchedFiles = filesForReference(product.image_reference)
-          const imageBlobs = []
-          for (let fileIndex = 0; fileIndex < matchedFiles.length; fileIndex += 1) {
-            const file = matchedFiles[fileIndex]
+          const imageBlobs = (await Promise.all(matchedFiles.map(async (file, fileIndex) => {
             setUploadProgress(`Checking image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
             try {
               const pathname = await blobPathFor(product, file)
               const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, file)
               if (existingBlob) {
-                imageBlobs.push({ url: existingBlob.url, pathname: existingBlob.pathname })
                 reusedImages += 1
-                continue
+                return { url: existingBlob.url, pathname: existingBlob.pathname }
               }
               setUploadProgress(`Uploading new image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
               const blob = await uploadBlob(pathname, file, {
@@ -125,18 +120,19 @@ export function BulkUploadButton({ mode }) {
                 handleUploadUrl: `${API_URL}/blob-upload`,
                 clientPayload: JSON.stringify({ adminToken: token }),
               })
-              imageBlobs.push({ url: blob.url, pathname: blob.pathname })
               blobsByPath.set(blob.pathname, blob)
               existingBlobs.push({ ...blob, size: file.size })
               uploadedImages += 1
+              return { url: blob.url, pathname: blob.pathname }
             } catch (error) {
               imageFailures.push({ product: product.name, file: file.name, message: error.message })
+              return null
             }
-          }
+          }))).filter(Boolean)
           const imageUrls = imageBlobs.length ? imageBlobs.map((blob) => blob.url) : product.image_urls
-          products.push({ ...product, image_url: imageUrls[0] || '', image_urls: imageUrls, image_blobs: imageBlobs })
-        }
-      }
+          return { ...product, image_url: imageUrls[0] || '', image_urls: imageUrls, image_blobs: imageBlobs }
+        }),
+      ) : []
       const response = await fetch(`${API_URL}/bulk-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
