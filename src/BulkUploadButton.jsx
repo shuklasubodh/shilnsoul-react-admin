@@ -47,6 +47,25 @@ export function BulkUploadButton({ mode }) {
     })
   }
 
+  const safeFileName = (name) => String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+  const blobPathFor = async (product, file) => {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+    const hash = [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `products/${product.slug}/${hash}-${safeFileName(file.name)}`
+  }
+  const legacyBlobFor = (existingBlobs, product, file) => {
+    const folder = `products/${product.slug}/`
+    const safeName = safeFileName(file.name)
+    const extensionIndex = safeName.lastIndexOf('.')
+    const stem = extensionIndex > 0 ? safeName.slice(0, extensionIndex) : safeName
+    const extension = extensionIndex > 0 ? safeName.slice(extensionIndex) : ''
+    return existingBlobs.find((blob) => {
+      if (!blob.pathname.startsWith(folder) || Number(blob.size) !== file.size) return false
+      const blobName = blob.pathname.slice(folder.length).toLowerCase()
+      return blobName === safeName || (blobName.startsWith(`${stem}-`) && blobName.endsWith(extension))
+    })
+  }
+
   const selectFile = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -71,28 +90,51 @@ export function BulkUploadButton({ mode }) {
       const productsWithLocalImages = mode === 'products' ? preview.products.filter((product) => product.image_reference) : []
       const unmatched = productsWithLocalImages.filter((product) => !filesForReference(product.image_reference).length)
       const imageFailures = []
+      let existingBlobs = []
+      if (mode === 'products' && imageFiles.length) {
+        try {
+          const blobResponse = await fetch(`${API_URL}/blob-images`, { headers: { Authorization: `Bearer ${token}` } })
+          if (blobResponse.ok) existingBlobs = (await blobResponse.json()).blobs || []
+        } catch {
+          // Blob listing is an optimization; individual uploads still report failures below.
+        }
+      }
+      const blobsByPath = new Map(existingBlobs.map((blob) => [blob.pathname, blob]))
+      let reusedImages = 0
+      let uploadedImages = 0
       const products = []
       if (mode === 'products') {
         for (let productIndex = 0; productIndex < preview.products.length; productIndex += 1) {
           const product = preview.products[productIndex]
           const matchedFiles = filesForReference(product.image_reference)
-          const uploadedUrls = []
+          const imageBlobs = []
           for (let fileIndex = 0; fileIndex < matchedFiles.length; fileIndex += 1) {
             const file = matchedFiles[fileIndex]
-            setUploadProgress(`Uploading image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
+            setUploadProgress(`Checking image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
             try {
-              const blob = await uploadBlob(`products/${product.slug}/${file.name}`, file, {
+              const pathname = await blobPathFor(product, file)
+              const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, file)
+              if (existingBlob) {
+                imageBlobs.push({ url: existingBlob.url, pathname: existingBlob.pathname })
+                reusedImages += 1
+                continue
+              }
+              setUploadProgress(`Uploading new image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
+              const blob = await uploadBlob(pathname, file, {
                 access: 'public',
                 handleUploadUrl: `${API_URL}/blob-upload`,
                 clientPayload: JSON.stringify({ adminToken: token }),
               })
-              uploadedUrls.push(blob.url)
+              imageBlobs.push({ url: blob.url, pathname: blob.pathname })
+              blobsByPath.set(blob.pathname, blob)
+              existingBlobs.push({ ...blob, size: file.size })
+              uploadedImages += 1
             } catch (error) {
               imageFailures.push({ product: product.name, file: file.name, message: error.message })
             }
           }
-          const imageUrls = uploadedUrls.length ? uploadedUrls : product.image_urls
-          products.push({ ...product, image_url: imageUrls[0] || '', image_urls: imageUrls })
+          const imageUrls = imageBlobs.length ? imageBlobs.map((blob) => blob.url) : product.image_urls
+          products.push({ ...product, image_url: imageUrls[0] || '', image_urls: imageUrls, image_blobs: imageBlobs })
         }
       }
       const response = await fetch(`${API_URL}/bulk-import`, {
@@ -105,7 +147,7 @@ export function BulkUploadButton({ mode }) {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Bulk upload failed.')
-      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated${unmatched.length ? `; images missing for ${unmatched.length} products` : ''}${imageFailures.length ? `; ${imageFailures.length} image uploads failed` : ''}` : ''}.`, { type: imageFailures.length ? 'warning' : 'success' })
+      notify(`${result.categories.created} categories created, ${result.categories.updated} updated${mode === 'products' ? `; ${result.products.created} products created, ${result.products.updated} updated; ${uploadedImages} new images uploaded; ${reusedImages} existing images reused${unmatched.length ? `; images missing for ${unmatched.length} products` : ''}${imageFailures.length ? `; ${imageFailures.length} image uploads failed` : ''}` : ''}.`, { type: imageFailures.length ? 'warning' : 'success' })
       reset()
       refresh()
     } catch (error) {

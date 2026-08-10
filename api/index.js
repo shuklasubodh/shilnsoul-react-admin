@@ -142,7 +142,7 @@ export default async function handler(request, response) {
             if (session.role !== 'ADMIN') throw new Error('Administrator access is required.')
             return {
               allowedContentTypes: ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
-              addRandomSuffix: true,
+              addRandomSuffix: false,
             }
           },
           onUploadCompleted: async () => {},
@@ -257,6 +257,9 @@ export default async function handler(request, response) {
       const categoryIds = new Map()
       const categoryResult = { created: 0, updated: 0 }
       const productResult = { created: 0, updated: 0 }
+      if (products.some((product) => productImages(product.image_urls?.length ? product.image_urls : product.image_url).length)) {
+        await ensureProductImagesTable(sql)
+      }
 
       for (const category of categories) {
         const existing = await sql.query('SELECT id FROM categories WHERE LOWER(slug) = LOWER($1) OR LOWER(name) = LOWER($2) LIMIT 1', [String(category.slug).trim(), String(category.name).trim()])
@@ -286,24 +289,46 @@ export default async function handler(request, response) {
         }
         if (!categoryId) return json(response, 400, { error: `No category was found for product SKU ${product.sku}.` })
 
+        const incomingImages = productImages(product.image_urls?.length ? product.image_urls : product.image_url)
         const values = [
           String(product.name).trim(), String(product.slug).trim(), String(product.sku).trim(), categoryId,
           String(product.description || ''), Number(product.price), Math.floor(Number(product.stock_quantity)),
-          JSON.stringify(productImages(product.image_urls?.length ? product.image_urls : product.image_url)), product.is_active !== false,
+          JSON.stringify(incomingImages), product.is_active !== false,
         ]
-        const existing = await sql.query('SELECT id FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(product.sku).trim()])
+        const existing = await sql.query('SELECT id, image_url FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(product.sku).trim()])
+        let productId
+        let mergedImages = incomingImages
         if (existing.length) {
+          mergedImages = [...new Set([...productImages(existing[0].image_url), ...incomingImages])]
+          values[7] = JSON.stringify(mergedImages)
           await sql.query(
             'UPDATE products SET name = $1, slug = $2, sku = $3, category_id = $4, description = $5, price = $6, stock_quantity = $7, image_url = $8, is_active = $9, updated_at = NOW() WHERE id = $10',
             [...values, existing[0].id],
           )
+          productId = existing[0].id
           productResult.updated += 1
         } else {
-          await sql.query(
-            'INSERT INTO products (name, slug, sku, category_id, description, price, stock_quantity, image_url, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+          const created = await sql.query(
+            'INSERT INTO products (name, slug, sku, category_id, description, price, stock_quantity, image_url, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
             values,
           )
+          productId = created[0].id
           productResult.created += 1
+        }
+
+        if (mergedImages.length) {
+          const blobPathByUrl = new Map((Array.isArray(product.image_blobs) ? product.image_blobs : []).map((blob) => [blob.url, blob.pathname || '']))
+          for (let imageIndex = 0; imageIndex < mergedImages.length; imageIndex += 1) {
+            const imageUrl = mergedImages[imageIndex]
+            await sql.query(`
+              INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
+              VALUES ($1, $2, $3, $4, FALSE)
+              ON CONFLICT (product_id, blob_url) DO UPDATE SET
+                blob_pathname = CASE WHEN EXCLUDED.blob_pathname <> '' THEN EXCLUDED.blob_pathname ELSE product_images.blob_pathname END,
+                sort_order = EXCLUDED.sort_order,
+                updated_at = NOW()
+            `, [productId, imageUrl, blobPathByUrl.get(imageUrl) || '', imageIndex])
+          }
         }
       }
 
