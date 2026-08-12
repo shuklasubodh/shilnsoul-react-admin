@@ -155,6 +155,37 @@ export function BannerMaintenance() {
     } catch (deleteError) { notify(deleteError.message, { type: 'error' }) }
   }
 
+  const saveAllBanners = async () => {
+    if (!banners.length) return
+    setSaving(true)
+    setError('')
+    const failures = []
+    for (const banner of banners) {
+      try { await apiFetch(`banners/${banner.id}`, { method: 'PUT', body: JSON.stringify(banner) }) }
+      catch (saveError) { failures.push(`${banner.title || banner.blob_pathname}: ${saveError.message}`) }
+    }
+    if (failures.length) setError(`${failures.length} banner${failures.length === 1 ? '' : 's'} could not be saved. ${failures[0]}`)
+    notify(failures.length ? `${banners.length - failures.length} of ${banners.length} banners saved.` : `All ${banners.length} banners saved.`, { type: failures.length ? 'warning' : 'success' })
+    setSaving(false)
+    await load()
+  }
+
+  const deleteAllBanners = async () => {
+    if (!banners.length || !window.confirm(`Permanently delete all ${banners.length} banners and their Blob images? This cannot be undone.`)) return
+    setSaving(true)
+    setError('')
+    const failures = []
+    let deleted = 0
+    for (const banner of banners) {
+      try { await apiFetch(`banners/${banner.id}`, { method: 'DELETE' }); deleted += 1 }
+      catch (deleteError) { failures.push(`${banner.title || banner.blob_pathname}: ${deleteError.message}`) }
+    }
+    if (failures.length) setError(`${failures.length} banner${failures.length === 1 ? '' : 's'} could not be deleted. ${failures[0]}`)
+    notify(failures.length ? `${deleted} of ${banners.length} banners deleted.` : `All ${deleted} banners and Blob images deleted.`, { type: failures.length ? 'warning' : 'success' })
+    setSaving(false)
+    await load()
+  }
+
   const changeBanner = (id, field, value) => setBanners((current) => current.map((banner) => banner.id === id ? { ...banner, [field]: value } : banner))
 
   return <Box sx={{ p: 3 }}><Title title="Banner Maintenance" />
@@ -195,7 +226,11 @@ export function BannerMaintenance() {
         </Box>)}
       </Box> : null}
     </Paper>
-    <Typography variant="h5" sx={{ mb: 1.5 }}>Saved banners ({banners.length})</Typography>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+      <Typography variant="h5" sx={{ mr: 'auto' }}>Saved banners ({banners.length})</Typography>
+      <Button variant="contained" startIcon={<SaveIcon />} onClick={saveAllBanners} disabled={!banners.length || saving}>{saving ? 'Working…' : 'Save all'}</Button>
+      <Button color="error" variant="contained" startIcon={<DeleteForeverIcon />} onClick={deleteAllBanners} disabled={!banners.length || saving}>Delete all</Button>
+    </Box>
     {loading ? <CircularProgress /> : !banners.length ? <Alert severity="info">No banners have been saved yet.</Alert> : <Box sx={{ display: 'grid', gap: 2 }}>
       {banners.map((banner) => <Paper key={banner.id} variant="outlined" sx={{ p: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '280px 1fr' }, gap: 2 }}>
         <AuthenticatedBlobImage blobUrl={banner.blob_url} alt={banner.alt_text} style={{ width: '100%', height: 160, objectFit: 'contain', background: '#f4f6f8' }} />
@@ -205,7 +240,7 @@ export function BannerMaintenance() {
           <TextField size="small" label="Link URL" value={banner.link_url} onChange={(event) => changeBanner(banner.id, 'link_url', event.target.value)} />
           <TextField size="small" type="number" label="Display order" value={banner.sort_order} inputProps={{ min: 0 }} onChange={(event) => changeBanner(banner.id, 'sort_order', event.target.value)} />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Checkbox checked={banner.is_active} onChange={(event) => changeBanner(banner.id, 'is_active', event.target.checked)} />Active<Typography variant="caption" color="text.secondary" noWrap>{banner.blob_pathname}</Typography></Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button startIcon={<SaveIcon />} onClick={() => updateBanner(banner)}>Save</Button><Button color="error" startIcon={<DeleteForeverIcon />} onClick={() => removeBanner(banner)}>Delete</Button></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button startIcon={<SaveIcon />} onClick={() => updateBanner(banner)} disabled={saving}>Save</Button><Button color="error" startIcon={<DeleteForeverIcon />} onClick={() => removeBanner(banner)} disabled={saving}>Delete</Button></Box>
         </Box>
       </Paper>)}
     </Box>}

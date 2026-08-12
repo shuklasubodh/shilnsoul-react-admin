@@ -311,9 +311,10 @@ export default async function handler(request, response) {
         return json(response, 200, rows[0])
       }
       if (request.method === 'DELETE' && id && positiveId(id)) {
-        const rows = await sql.query('DELETE FROM banners WHERE id = $1 RETURNING *', [id])
+        const rows = await sql.query('SELECT * FROM banners WHERE id = $1', [id])
         if (!rows.length) return json(response, 404, { error: 'Banner not found.' })
         await deleteBlob(rows[0].blob_url)
+        await sql.query('DELETE FROM banners WHERE id = $1', [id])
         return json(response, 200, rows[0])
       }
       return json(response, 405, { error: 'Method not allowed.' })
