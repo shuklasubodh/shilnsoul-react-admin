@@ -124,6 +124,24 @@ const ensureProductImagesTable = async (sql) => {
   await sql.query('CREATE UNIQUE INDEX IF NOT EXISTS product_images_one_primary_idx ON product_images(product_id) WHERE is_primary')
 }
 
+const ensureBannersTable = async (sql) => {
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS banners (
+      id BIGSERIAL PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      alt_text TEXT NOT NULL DEFAULT '',
+      link_url TEXT NOT NULL DEFAULT '',
+      blob_url TEXT NOT NULL UNIQUE,
+      blob_pathname TEXT NOT NULL UNIQUE CHECK (blob_pathname LIKE 'banner/%'),
+      sort_order INTEGER NOT NULL DEFAULT 0 CHECK (sort_order >= 0),
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+  await sql.query('CREATE INDEX IF NOT EXISTS banners_display_idx ON banners(is_active, sort_order, id)')
+}
+
 const allProductBlobs = async () => {
   const blobs = []
   let cursor
@@ -184,10 +202,12 @@ export default async function handler(request, response) {
         const result = await handleUpload({
           request,
           body: request.body,
-          onBeforeGenerateToken: async (_pathname, clientPayload) => {
-            const { adminToken } = parseJson(clientPayload, {})
+          onBeforeGenerateToken: async (pathname, clientPayload) => {
+            const { adminToken, uploadType = 'product' } = parseJson(clientPayload, {})
             const session = jwt.verify(adminToken || '', authSecret, { issuer: 'shilpnsoul-admin' })
             if (session.role !== 'ADMIN') throw new Error('Administrator access is required.')
+            const allowedPrefix = uploadType === 'banner' ? 'banner/' : 'products/'
+            if (!String(pathname).startsWith(allowedPrefix)) throw new Error(`Uploads of this type must be stored under ${allowedPrefix}.`)
             return {
               allowedContentTypes: ['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'],
               addRandomSuffix: false,
@@ -259,6 +279,42 @@ export default async function handler(request, response) {
           updatedProducts += 1
         }
         return json(response, 200, { deleted: true, removed_mappings: removedMappings.length, updated_products: updatedProducts })
+      }
+      return json(response, 405, { error: 'Method not allowed.' })
+    }
+
+    if (resourceName === 'banners' && !extra.length) {
+      await ensureBannersTable(sql)
+      if (request.method === 'GET' && !id) {
+        const rows = await sql.query('SELECT * FROM banners ORDER BY sort_order, id')
+        return json(response, 200, rows)
+      }
+      if (request.method === 'POST' && !id) {
+        const { title = '', alt_text: altText = '', link_url: linkUrl = '', blob_url: blobUrl, blob_pathname: blobPathname, sort_order: sortOrder = 0, is_active: isActive = true } = request.body || {}
+        if (!validBlobUrl(blobUrl) || !String(blobPathname || '').startsWith('banner/')) {
+          return json(response, 400, { error: 'A valid Vercel Blob image stored under banner/ is required.' })
+        }
+        const rows = await sql.query(`
+          INSERT INTO banners (title, alt_text, link_url, blob_url, blob_pathname, sort_order, is_active)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING *
+        `, [String(title).trim(), String(altText).trim(), String(linkUrl).trim(), String(blobUrl), String(blobPathname), Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isActive)])
+        return json(response, 201, rows[0])
+      }
+      if (request.method === 'PUT' && id && positiveId(id)) {
+        const { title = '', alt_text: altText = '', link_url: linkUrl = '', sort_order: sortOrder = 0, is_active: isActive = true } = request.body || {}
+        const rows = await sql.query(`
+          UPDATE banners SET title = $1, alt_text = $2, link_url = $3, sort_order = $4, is_active = $5, updated_at = NOW()
+          WHERE id = $6 RETURNING *
+        `, [String(title).trim(), String(altText).trim(), String(linkUrl).trim(), Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isActive), id])
+        if (!rows.length) return json(response, 404, { error: 'Banner not found.' })
+        return json(response, 200, rows[0])
+      }
+      if (request.method === 'DELETE' && id && positiveId(id)) {
+        const rows = await sql.query('DELETE FROM banners WHERE id = $1 RETURNING *', [id])
+        if (!rows.length) return json(response, 404, { error: 'Banner not found.' })
+        await deleteBlob(rows[0].blob_url)
+        return json(response, 200, rows[0])
       }
       return json(response, 405, { error: 'Method not allowed.' })
     }

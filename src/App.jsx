@@ -16,6 +16,7 @@ import { userResource } from './resources/users'
 import { ProductImageMapping } from './ProductImageMapping'
 import { ImageMaintenance } from './ImageMaintenance'
 import { MediaConversion } from './MediaConversion'
+import { BannerMaintenance } from './BannerMaintenance'
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
         <Route path="/product-images" element={<ProductImageMapping />} />
         <Route path="/image-maintenance" element={<ImageMaintenance />} />
         <Route path="/media-conversion" element={<MediaConversion />} />
+        <Route path="/banner-maintenance" element={<BannerMaintenance />} />
       </CustomRoutes>
     </Admin>
   )
