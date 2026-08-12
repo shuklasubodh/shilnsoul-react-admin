@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Title, useNotify } from 'react-admin'
 import { upload as uploadBlob } from '@vercel/blob/client'
-import { Alert, Box, Button, Checkbox, CircularProgress, Paper, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, CircularProgress, LinearProgress, Paper, TextField, Typography } from '@mui/material'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import SaveIcon from '@mui/icons-material/Save'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
 
 const apiFetch = async (path, options = {}) => {
@@ -18,13 +19,17 @@ const apiFetch = async (path, options = {}) => {
 }
 
 const safeFileName = (name) => String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+const isImageFile = (file) => file.type.startsWith('image/') || /\.(avif|gif|jpe?g|png|webp)$/i.test(file.name)
 
 export function BannerMaintenance() {
   const notify = useNotify()
   const inputRef = useRef(null)
+  const folderRef = useRef(null)
   const [banners, setBanners] = useState([])
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
+  const [bulkFiles, setBulkFiles] = useState([])
+  const [bulkProgress, setBulkProgress] = useState('')
   const [form, setForm] = useState({ title: '', alt_text: '', link_url: '', sort_order: 0, is_active: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -39,6 +44,24 @@ export function BannerMaintenance() {
 
   useEffect(() => { const timer = window.setTimeout(load, 0); return () => window.clearTimeout(timer) }, [load])
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+
+  const chooseFolder = (selectedFiles) => {
+    bulkFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+    const images = [...selectedFiles].filter(isImageFile)
+    setBulkFiles(images.map((selectedFile) => ({
+      file: selectedFile,
+      previewUrl: URL.createObjectURL(selectedFile),
+      name: selectedFile.name.replace(/\.[^.]+$/, ''),
+    })))
+    if (!images.length) notify('The selected folder does not contain supported images.', { type: 'warning' })
+  }
+
+  const clearBulkFiles = () => {
+    bulkFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+    setBulkFiles([])
+    setBulkProgress('')
+    if (folderRef.current) folderRef.current.value = ''
+  }
 
   const chooseFile = (selectedFile) => {
     if (!selectedFile) return
@@ -70,6 +93,49 @@ export function BannerMaintenance() {
     } catch (uploadError) {
       setError(`${uploadError.message}${blob ? ' The Blob upload succeeded, but its database record was not saved.' : ''}`)
     } finally { setSaving(false) }
+  }
+
+  const uploadFolder = async () => {
+    if (!bulkFiles.length) return notify('Choose a folder containing banner images.', { type: 'warning' })
+    setSaving(true)
+    setError('')
+    const token = localStorage.getItem('admin_token')
+    const failures = []
+    let uploaded = 0
+    const startingOrder = banners.reduce((highest, banner) => Math.max(highest, Number(banner.sort_order) || 0), -1) + 1
+    for (let index = 0; index < bulkFiles.length; index += 1) {
+      const item = bulkFiles[index]
+      setBulkProgress(`Uploading ${index + 1} of ${bulkFiles.length}: ${item.file.name}`)
+      let blob
+      try {
+        const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(item.file.name)}`
+        blob = await uploadBlob(`banner/${uniqueName}`, item.file, {
+          access: 'public',
+          handleUploadUrl: '/api/blob-upload',
+          clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
+        })
+        await apiFetch('banners', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: item.name,
+            alt_text: item.name,
+            link_url: '',
+            sort_order: startingOrder + index,
+            is_active: true,
+            blob_url: blob.url,
+            blob_pathname: blob.pathname,
+          }),
+        })
+        uploaded += 1
+      } catch (uploadError) {
+        failures.push(`${item.file.name}: ${uploadError.message}${blob ? ' (Blob uploaded, database record failed)' : ''}`)
+      }
+    }
+    if (uploaded) notify(`${uploaded} banner${uploaded === 1 ? '' : 's'} uploaded and saved.`, { type: 'success' })
+    if (failures.length) setError(`${failures.length} image${failures.length === 1 ? '' : 's'} failed. ${failures[0]}`)
+    clearBulkFiles()
+    setSaving(false)
+    await load()
   }
 
   const updateBanner = async (banner) => {
@@ -111,6 +177,23 @@ export function BannerMaintenance() {
           <Button variant="contained" startIcon={<SaveIcon />} onClick={upload} disabled={!file || !form.alt_text.trim() || saving}>{saving ? 'Uploading…' : 'Upload and save banner'}</Button>
         </Box>
       </Box>
+    </Paper>
+    <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
+      <Typography variant="h6">Bulk upload from local folder</Typography>
+      <Typography color="text.secondary" sx={{ mb: 2 }}>Select a folder to preview and upload all supported images. Every image is saved as a separate active banner using its filename for the title and alt text.</Typography>
+      <input ref={folderRef} hidden type="file" accept="image/*" multiple webkitdirectory="" directory="" onChange={(event) => chooseFolder(event.target.files || [])} />
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: bulkFiles.length ? 2 : 0 }}>
+        <Button variant="outlined" startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={saving}>Select local folder</Button>
+        {bulkFiles.length ? <><Button variant="contained" startIcon={<SaveIcon />} onClick={uploadFolder} disabled={saving}>{saving ? 'Uploading…' : `Upload all (${bulkFiles.length})`}</Button><Button onClick={clearBulkFiles} disabled={saving}>Clear</Button></> : null}
+      </Box>
+      {bulkProgress ? <Box sx={{ mb: 2 }}><LinearProgress sx={{ mb: 1 }} /><Typography variant="body2">{bulkProgress}</Typography></Box> : null}
+      {bulkFiles.length ? <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1.5 }}>
+        {bulkFiles.map((item) => <Box key={`${item.file.webkitRelativePath}-${item.file.name}`} sx={{ border: '1px solid #dbe3ea', p: 1, minWidth: 0 }}>
+          <img src={item.previewUrl} alt={item.name} style={{ width: '100%', height: 120, objectFit: 'contain', background: '#f4f6f8' }} />
+          <Typography variant="body2" title={item.file.webkitRelativePath || item.file.name} noWrap sx={{ mt: .75 }}>{item.name}</Typography>
+          <Typography variant="caption" color="text.secondary">{Math.max(1, Math.round(item.file.size / 1024))} KB</Typography>
+        </Box>)}
+      </Box> : null}
     </Paper>
     <Typography variant="h5" sx={{ mb: 1.5 }}>Saved banners ({banners.length})</Typography>
     {loading ? <CircularProgress /> : !banners.length ? <Alert severity="info">No banners have been saved yet.</Alert> : <Box sx={{ display: 'grid', gap: 2 }}>
