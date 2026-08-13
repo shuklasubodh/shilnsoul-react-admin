@@ -9,21 +9,9 @@ const canvasToJpeg = (canvas) => new Promise((resolve, reject) => {
   canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Could not create the JPG image.')), 'image/jpeg', 0.92)
 })
 
-const imageToJpeg = async (blob) => {
-  const bitmap = await createImageBitmap(blob)
-  const canvas = document.createElement('canvas')
-  canvas.width = bitmap.width
-  canvas.height = bitmap.height
-  canvas.getContext('2d').drawImage(bitmap, 0, 0)
-  bitmap.close()
-  return canvasToJpeg(canvas)
-}
-
 const heicToJpeg = async (file) => {
-  const { default: heic2any } = await import('heic2any')
-  const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-  const jpeg = Array.isArray(converted) ? converted[0] : converted
-  return jpeg.type === 'image/jpeg' ? jpeg : imageToJpeg(jpeg)
+  const { heicTo } = await import('heic-to')
+  return heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 })
 }
 
 const movToJpeg = (file) => new Promise((resolve, reject) => {
