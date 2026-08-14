@@ -41,6 +41,31 @@ const resources = {
 
 const json = (response, status, body) => response.status(status).json(body)
 const positiveId = (value) => /^\d+$/.test(String(value)) && Number(value) > 0
+const slugify = (value) => String(value ?? '')
+  .trim()
+  .toLowerCase()
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+
+const uniqueProductSlug = async (sql, requestedSlug, sku, productId) => {
+  const base = slugify(requestedSlug) || slugify(sku) || 'product'
+  const skuSuffix = slugify(sku)
+  let candidate = base
+  let suffix = 2
+
+  while (true) {
+    const conflict = await sql.query(
+      'SELECT id FROM products WHERE LOWER(slug) = LOWER($1) AND ($2::bigint IS NULL OR id <> $2::bigint) LIMIT 1',
+      [candidate, productId || null],
+    )
+    if (!conflict.length) return candidate
+    candidate = `${base}-${skuSuffix || suffix}`
+    if (suffix > 2) candidate += `-${suffix}`
+    suffix += 1
+  }
+}
 
 const matchesLegacyPassword = (password, storedValue) => {
   const supplied = Buffer.from(String(password))
@@ -497,12 +522,14 @@ export default async function handler(request, response) {
         if (!categoryId) return json(response, 400, { error: `No category was found for product SKU ${product.sku}.` })
 
         const incomingImages = productImages(product.image_urls?.length ? product.image_urls : product.image_url)
+        const normalizedSku = String(product.sku).trim()
+        const existing = await sql.query('SELECT id, image_url FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [normalizedSku])
+        const resolvedSlug = await uniqueProductSlug(sql, product.slug, normalizedSku, existing[0]?.id)
         const values = [
-          String(product.name).trim(), String(product.slug).trim(), String(product.sku).trim(), categoryId,
+          String(product.name).trim(), resolvedSlug, normalizedSku, categoryId,
           String(product.description || ''), Number(product.price), Math.floor(Number(product.stock_quantity)),
           JSON.stringify(incomingImages), product.is_active !== false,
         ]
-        const existing = await sql.query('SELECT id, image_url FROM products WHERE LOWER(sku) = LOWER($1) LIMIT 1', [String(product.sku).trim()])
         let productId
         let mergedImages = incomingImages
         if (existing.length) {
