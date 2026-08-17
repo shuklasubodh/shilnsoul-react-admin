@@ -599,7 +599,7 @@ export default async function handler(request, response) {
       const values = []
       const q = filter.q ?? request.query._q
 
-      if (resourceName === 'products' && availableColumns.includes('is_active') && !Object.hasOwn(filter, 'is_active')) {
+      if (['products', 'categories'].includes(resourceName) && availableColumns.includes('is_active') && !Object.hasOwn(filter, 'is_active')) {
         values.push(true)
         clauses.push(`"is_active" = $${values.length}`)
       }
@@ -668,11 +668,12 @@ export default async function handler(request, response) {
     }
 
     if (request.method === 'DELETE' && id) {
-      if (resourceName === 'products' && availableColumns.includes('is_active')) {
+      if (['products', 'categories'].includes(resourceName) && availableColumns.includes('is_active')) {
         const updatedAt = availableColumns.includes('updated_at') ? ', "updated_at" = NOW()' : ''
-        const rows = await sql.query(`UPDATE "products" SET "is_active" = FALSE${updatedAt} WHERE id = $1 RETURNING id`, [id])
+        const rows = await sql.query(`UPDATE "${resource.table}" SET "is_active" = FALSE${updatedAt} WHERE id = $1 RETURNING id`, [id])
         if (!rows.length) return json(response, 404, { error: 'Record not found.' })
-        return json(response, 200, { message: 'Product archived successfully.', id: rows[0].id })
+        const label = resourceName === 'products' ? 'Product' : 'Category'
+        return json(response, 200, { message: `${label} archived successfully.`, id: rows[0].id })
       }
       const rows = await sql.query(`DELETE FROM "${resource.table}" WHERE id = $1 RETURNING id`, [id])
       if (!rows.length) return json(response, 404, { error: 'Record not found.' })

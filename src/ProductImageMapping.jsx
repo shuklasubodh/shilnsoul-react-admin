@@ -101,7 +101,7 @@ export function ProductImageMapping() {
 
   const save = async (blob) => {
     const draft = drafts[blob.url]
-    const productId = productFilter || draft?.product_id
+    const productId = draft?.product_id
     if (!productId) return notify('Select a product first.', { type: 'warning' })
     setSavingUrl(blob.url)
     try {
@@ -117,13 +117,13 @@ export function ProductImageMapping() {
 
   const saveSelected = async () => {
     const selectedBlobs = blobs.filter((blob) => selectedUrls.includes(blob.url))
-    const missingProduct = selectedBlobs.some((blob) => !(productFilter || drafts[blob.url]?.product_id))
+    const missingProduct = selectedBlobs.some((blob) => !drafts[blob.url]?.product_id)
     if (!selectedBlobs.length) return notify('Select at least one image.', { type: 'warning' })
     if (missingProduct) return notify('Select a product for every selected image.', { type: 'warning' })
     setSavingMultiple(true)
     try {
       for (const blob of selectedBlobs) {
-        await saveMapping(blob, productFilter || drafts[blob.url].product_id)
+        await saveMapping(blob, drafts[blob.url].product_id)
       }
       notify(`${selectedBlobs.length} images mapped to products.`, { type: 'success' })
       setSelectedUrls([])
@@ -267,7 +267,7 @@ export function ProductImageMapping() {
       </Box>
       {selectedProduct ? <Alert severity="info" sx={{ mt: 1.5 }}>
         {unmappedOnly
-          ? `Showing ${visibleBlobs.length} unmapped images available to assign to ${selectedProduct.name} (${selectedProduct.sku}).`
+          ? `Showing ${visibleBlobs.length} unmapped images. Choose a product in each row before saving; the product filter is not used as a default assignment.`
           : `${visibleBlobs.length} images are mapped to ${selectedProduct.name} (${selectedProduct.sku}).`}
       </Alert> : null}
     </Paper>
@@ -279,14 +279,14 @@ export function ProductImageMapping() {
         <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={selectedVisibleCount > 0 && !allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} inputProps={{ 'aria-label': 'Select all visible images' }} /></TableCell><TableCell>Preview</TableCell><TableCell>Blob pathname</TableCell><TableCell>Product</TableCell><TableCell>Primary</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
         <TableBody>{visibleBlobs.map((blob) => {
           const draft = drafts[blob.url] || {}
-          const selectedProductId = productFilter || draft.product_id || ''
+          const selectedProductId = draft.product_id || ''
           const mapping = productFilter ? mappingByProductUrl.get(`${productFilter}|${blob.url}`) : mappedByUrl.get(blob.url)
           const saving = savingUrl === blob.url
           return <TableRow key={blob.url}>
             <TableCell padding="checkbox"><Checkbox checked={selectedUrlSet.has(blob.url)} onChange={(event) => setSelectedUrls((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} inputProps={{ 'aria-label': `Select ${blob.pathname}` }} /></TableCell>
             <TableCell><AuthenticatedBlobImage className="blob-preview" blobUrl={blob.url} alt={blob.pathname} /></TableCell>
             <TableCell><Typography variant="body2">{blob.pathname}</Typography>{mapping ? <Typography variant="caption" color="success.main">Mapped to {mapping.product_name}</Typography> : <Typography variant="caption" color="warning.main">Unmapped</Typography>}</TableCell>
-            <TableCell><Select size="small" displayEmpty value={selectedProductId} disabled={Boolean(productFilter)} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
+            <TableCell><Select size="small" displayEmpty value={selectedProductId} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
               <MenuItem value=""><em>Select product</em></MenuItem>{detailProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
             </Select></TableCell>
             <TableCell><Checkbox checked={Boolean(draft.is_primary)} onChange={(event) => updateDraft(blob.url, { is_primary: event.target.checked })} /></TableCell>
