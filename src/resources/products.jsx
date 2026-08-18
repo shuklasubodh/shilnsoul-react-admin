@@ -15,7 +15,6 @@ const ProductBulkActions = () => <BulkDeleteButton mutationMode="pessimistic" />
 const ProductList = () => (
   <List
     actions={<ProductActions />}
-    empty={false}
     filters={[<SearchInput key="search" source="q" placeholder="Search / filter by category" alwaysOn />]}
     sort={{ field: 'id', order: 'ASC' }}
   >

@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { handleUpload } from '@vercel/blob/client'
-import { del as deleteBlob, get as getBlob, head as headBlob, list as listBlobs, rename as renameBlob } from '@vercel/blob'
+import { del as deleteBlob, get as getBlob, list as listBlobs } from '@vercel/blob'
 
 const BCRYPT_ROUNDS = 12
 const bcryptHashPattern = /^\$2[aby]\$\d{2}\$.{53}$/
@@ -178,30 +178,6 @@ const allProductBlobs = async () => {
   return blobs
 }
 
-const filenameFromPath = (pathname) => String(pathname || '').split('/').filter(Boolean).pop() || 'image'
-
-const availableBlobPath = async (folder, filename, currentPathname) => {
-  const desiredPath = `${folder}/${filename}`
-  if (desiredPath === currentPathname) return desiredPath
-  const existingPaths = new Set((await allProductBlobs()).map((blob) => blob.pathname))
-  if (!existingPaths.has(desiredPath)) return desiredPath
-  const dot = filename.lastIndexOf('.')
-  const stem = dot > 0 ? filename.slice(0, dot) : filename
-  const extension = dot > 0 ? filename.slice(dot) : ''
-  const suffix = createHash('sha256').update(currentPathname).digest('hex').slice(0, 10)
-  return `${folder}/${stem}-${suffix}${extension}`
-}
-
-const moveProductBlob = async (blobUrl, folder) => {
-  const metadata = await headBlob(blobUrl)
-  const targetPathname = await availableBlobPath(folder, filenameFromPath(metadata.pathname), metadata.pathname)
-  if (targetPathname === metadata.pathname) return metadata
-  return renameBlob(blobUrl, targetPathname, {
-    access: blobUrl.includes('.private.blob.vercel-storage.com') ? 'private' : 'public',
-    addRandomSuffix: false,
-    allowOverwrite: false,
-  })
-}
 const syncProductImageUrls = async (sql, productId) => {
   let rows = await sql.query('SELECT id, blob_url, is_primary FROM product_images WHERE product_id = $1 ORDER BY is_primary DESC, sort_order, id', [productId])
   if (rows.length && !rows.some((row) => row.is_primary)) {
@@ -213,14 +189,6 @@ const syncProductImageUrls = async (sql, productId) => {
   return urls
 }
 
-const replaceMappedBlob = async (sql, oldUrl, movedBlob) => {
-  const affected = await sql.query('SELECT DISTINCT product_id FROM product_images WHERE blob_url = $1', [oldUrl])
-  await sql.query(
-    'UPDATE product_images SET blob_url = $1, blob_pathname = $2, updated_at = NOW() WHERE blob_url = $3',
-    [movedBlob.url, movedBlob.pathname, oldUrl],
-  )
-  for (const row of affected) await syncProductImageUrls(sql, row.product_id)
-}
 const databaseError = (response, error) => {
   console.error('Database request failed:', error)
   if (error.code === '42P01' || error.code === '42703') {
@@ -319,8 +287,8 @@ export default async function handler(request, response) {
     if (resourceName === 'blob-images' && !id && !extra.length) {
       if (!process.env.BLOB_READ_WRITE_TOKEN) return json(response, 503, { error: 'Connect a Vercel Blob store to manage product images.' })
       if (request.method === 'GET') {
-        const blobs = await allProductBlobs()
-        return json(response, 200, { blobs, hasMore: false })
+        const result = await listBlobs({ prefix: 'products/', limit: 1000, cursor: request.query.cursor || undefined })
+        return json(response, 200, result)
       }
       if (request.method === 'DELETE') {
         const blobUrl = request.body?.blob_url
@@ -434,37 +402,6 @@ export default async function handler(request, response) {
           updatedProducts += 1
         }
       }
-      // Enforce one owning product per image so its Blob folder always matches
-      // that product's slug. Older duplicate mappings retain the first owner.
-      const ownershipRows = await sql.query(`
-        SELECT pi.id, pi.product_id, pi.blob_url, p.slug
-        FROM product_images pi
-        JOIN products p ON p.id = pi.product_id
-        ORDER BY pi.id
-      `)
-      const ownershipByUrl = new Map()
-      for (const ownership of ownershipRows) {
-        if (!ownershipByUrl.has(ownership.blob_url)) {
-          ownershipByUrl.set(ownership.blob_url, ownership)
-          continue
-        }
-        await sql.query('DELETE FROM product_images WHERE id = $1', [ownership.id])
-        await syncProductImageUrls(sql, ownership.product_id)
-        removedStaleMappings += 1
-      }
-
-      let organizedBlobs = 0
-      const currentBlobs = await allProductBlobs()
-      for (const blob of currentBlobs) {
-        const ownership = ownershipByUrl.get(blob.url)
-        const targetFolder = ownership ? `products/${ownership.slug}` : 'products/unmapped'
-        const currentFolder = blob.pathname.split('/').slice(0, -1).join('/')
-        if (currentFolder === targetFolder) continue
-        const movedBlob = await moveProductBlob(blob.url, targetFolder)
-        if (ownership) await replaceMappedBlob(sql, blob.url, movedBlob)
-        organizedBlobs += 1
-      }
-
       return json(response, 200, {
         blobs_found: blobs.length,
         repaired_mappings: repairedMappings,
@@ -472,7 +409,6 @@ export default async function handler(request, response) {
         created_mappings: createdMappings,
         updated_products: updatedProducts,
         assigned_primaries: assignedPrimaries,
-        organized_blobs: organizedBlobs,
       })
     }
 
@@ -515,14 +451,8 @@ export default async function handler(request, response) {
       if (request.method === 'POST' && !id) {
         const { product_id: productId, blob_url: blobUrl, blob_pathname: blobPathname = '', sort_order: sortOrder = 0, is_primary: isPrimary = false } = request.body || {}
         if (!positiveId(productId) || !validBlobUrl(blobUrl)) return json(response, 400, { error: 'A valid product and public Vercel Blob URL are required.' })
-        const products = await sql.query('SELECT id, slug FROM products WHERE id = $1', [productId])
+        const products = await sql.query('SELECT id FROM products WHERE id = $1', [productId])
         if (!products.length) return json(response, 404, { error: 'Product not found.' })
-        const movedBlob = await moveProductBlob(String(blobUrl), `products/${products[0].slug}`)
-        if (movedBlob.url !== String(blobUrl)) await replaceMappedBlob(sql, String(blobUrl), movedBlob)
-        const savedBlobUrl = movedBlob.url
-        const savedBlobPathname = movedBlob.pathname || blobPathname
-        const previousOwners = await sql.query('DELETE FROM product_images WHERE blob_url = $1 AND product_id <> $2 RETURNING product_id', [savedBlobUrl, productId])
-        for (const previousProductId of new Set(previousOwners.map((owner) => owner.product_id))) await syncProductImageUrls(sql, previousProductId)
         if (isPrimary) await sql.query('UPDATE product_images SET is_primary = FALSE, updated_at = NOW() WHERE product_id = $1', [productId])
         const rows = await sql.query(`
           INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
@@ -533,18 +463,15 @@ export default async function handler(request, response) {
             is_primary = EXCLUDED.is_primary,
             updated_at = NOW()
           RETURNING *
-        `, [productId, savedBlobUrl, savedBlobPathname, Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isPrimary)])
+        `, [productId, String(blobUrl), String(blobPathname), Math.max(0, Math.floor(Number(sortOrder) || 0)), Boolean(isPrimary)])
         await syncProductImageUrls(sql, productId)
         return json(response, 200, rows[0])
       }
       if (request.method === 'DELETE' && id && positiveId(id)) {
-        const rows = await sql.query('DELETE FROM product_images WHERE id = $1 RETURNING id, product_id, blob_url', [id])
+        const rows = await sql.query('DELETE FROM product_images WHERE id = $1 RETURNING id, product_id', [id])
         if (!rows.length) return json(response, 404, { error: 'Image mapping not found.' })
         await syncProductImageUrls(sql, rows[0].product_id)
-        const remainingMappings = await sql.query('SELECT id FROM product_images WHERE blob_url = $1 LIMIT 1', [rows[0].blob_url])
-        let movedBlob = null
-        if (!remainingMappings.length) movedBlob = await moveProductBlob(rows[0].blob_url, 'products/unmapped')
-        return json(response, 200, { ...rows[0], blob_url: movedBlob?.url || rows[0].blob_url, blob_pathname: movedBlob?.pathname || '' })
+        return json(response, 200, rows[0])
       }
       return json(response, 405, { error: 'Method not allowed.' })
     }
@@ -624,44 +551,18 @@ export default async function handler(request, response) {
         }
 
         if (mergedImages.length) {
-          const incomingBlobByUrl = new Map((Array.isArray(product.image_blobs) ? product.image_blobs : []).map((blob) => [blob.url, blob]))
-          const targetFolder = `products/${resolvedSlug}`
-          const imageMappings = []
+          const blobPathByUrl = new Map((Array.isArray(product.image_blobs) ? product.image_blobs : []).map((blob) => [blob.url, blob.pathname || '']))
           for (let imageIndex = 0; imageIndex < mergedImages.length; imageIndex += 1) {
-            let imageUrl = mergedImages[imageIndex]
-            let blobPathname = incomingBlobByUrl.get(imageUrl)?.pathname || ''
-            if (incomingBlobByUrl.has(imageUrl) && !blobPathname.startsWith(`${targetFolder}/`)) {
-              const movedBlob = await moveProductBlob(imageUrl, targetFolder)
-              if (movedBlob.url !== imageUrl) await replaceMappedBlob(sql, imageUrl, movedBlob)
-              imageUrl = movedBlob.url
-              blobPathname = movedBlob.pathname
-              mergedImages[imageIndex] = imageUrl
-            }
-            imageMappings.push({ imageUrl, blobPathname, imageIndex })
+            const imageUrl = mergedImages[imageIndex]
+            await sql.query(`
+              INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
+              VALUES ($1, $2, $3, $4, FALSE)
+              ON CONFLICT (product_id, blob_url) DO UPDATE SET
+                blob_pathname = CASE WHEN EXCLUDED.blob_pathname <> '' THEN EXCLUDED.blob_pathname ELSE product_images.blob_pathname END,
+                sort_order = EXCLUDED.sort_order,
+                updated_at = NOW()
+            `, [productId, imageUrl, blobPathByUrl.get(imageUrl) || '', imageIndex])
           }
-
-          const mappedUrls = imageMappings.map((mapping) => mapping.imageUrl)
-          const previousOwners = await sql.query(
-            'DELETE FROM product_images WHERE blob_url = ANY($1::text[]) AND product_id <> $2 RETURNING product_id',
-            [mappedUrls, productId],
-          )
-          for (const previousProductId of new Set(previousOwners.map((owner) => owner.product_id))) await syncProductImageUrls(sql, previousProductId)
-
-          const mappingValues = []
-          const mappingPlaceholders = imageMappings.map((mapping, index) => {
-            const offset = index * 4
-            mappingValues.push(productId, mapping.imageUrl, mapping.blobPathname, mapping.imageIndex)
-            return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, FALSE)`
-          })
-          await sql.query(`
-            INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
-            VALUES ${mappingPlaceholders.join(', ')}
-            ON CONFLICT (product_id, blob_url) DO UPDATE SET
-              blob_pathname = CASE WHEN EXCLUDED.blob_pathname <> '' THEN EXCLUDED.blob_pathname ELSE product_images.blob_pathname END,
-              sort_order = EXCLUDED.sort_order,
-              updated_at = NOW()
-          `, mappingValues)
-          await syncProductImageUrls(sql, productId)
         }
       }
 
@@ -782,10 +683,6 @@ export default async function handler(request, response) {
     response.setHeader('Allow', 'GET,POST,PUT,DELETE,OPTIONS')
     return json(response, 405, { error: 'Method not allowed.' })
   } catch (error) {
-    console.error(`[api:${resourceName || 'unknown'}] request failed`, { message: error.message, code: error.code, stack: error.stack })
-    if (resourceName === 'bulk-import' && !error.code) {
-      return json(response, 500, { error: `Bulk import failed: ${error.message || 'unknown storage error'}` })
-    }
     return databaseError(response, error)
   }
 }
