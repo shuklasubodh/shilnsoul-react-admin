@@ -79,9 +79,7 @@ export function ProductImageMapping() {
     const folder = blob.pathname.split('/').slice(0, -1).join('/')
     return !folderFilter || folder === folderFilter
   }), [blobs, folderFilter, mappedByUrl, mappingByProductUrl, productFilter, unmappedOnly])
-  const detailProducts = useMemo(() => productFilter
-    ? products.filter((product) => String(product.id) === productFilter)
-    : products, [productFilter, products])
+  const detailProducts = products
   const selectedUrlSet = useMemo(() => new Set(selectedUrls), [selectedUrls])
   const selectedProduct = useMemo(() => products.find((product) => String(product.id) === productFilter), [productFilter, products])
   const selectedVisibleCount = visibleBlobs.filter((blob) => selectedUrlSet.has(blob.url)).length
@@ -279,14 +277,14 @@ export function ProductImageMapping() {
         <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={allVisibleSelected} indeterminate={selectedVisibleCount > 0 && !allVisibleSelected} onChange={(event) => toggleAllVisible(event.target.checked)} inputProps={{ 'aria-label': 'Select all visible images' }} /></TableCell><TableCell>Preview</TableCell><TableCell>Blob pathname</TableCell><TableCell>Product</TableCell><TableCell>Primary</TableCell><TableCell>Actions</TableCell></TableRow></TableHead>
         <TableBody>{visibleBlobs.map((blob) => {
           const draft = drafts[blob.url] || {}
-          const selectedProductId = draft.product_id || ''
           const mapping = productFilter ? mappingByProductUrl.get(`${productFilter}|${blob.url}`) : mappedByUrl.get(blob.url)
+          const selectedProductId = draft.product_changed ? draft.product_id : mapping ? String(mapping.product_id) : draft.product_id || ''
           const saving = savingUrl === blob.url
           return <TableRow key={blob.url}>
             <TableCell padding="checkbox"><Checkbox checked={selectedUrlSet.has(blob.url)} onChange={(event) => setSelectedUrls((current) => event.target.checked ? [...new Set([...current, blob.url])] : current.filter((url) => url !== blob.url))} inputProps={{ 'aria-label': `Select ${blob.pathname}` }} /></TableCell>
             <TableCell><AuthenticatedBlobImage className="blob-preview" blobUrl={blob.url} alt={blob.pathname} /></TableCell>
             <TableCell><Typography variant="body2">{blob.pathname}</Typography>{mapping ? <Typography variant="caption" color="success.main">Mapped to {mapping.product_name}</Typography> : <Typography variant="caption" color="warning.main">Unmapped</Typography>}</TableCell>
-            <TableCell><Select size="small" displayEmpty value={selectedProductId} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value })} sx={{ minWidth: 260 }}>
+            <TableCell><Select size="small" displayEmpty value={selectedProductId} onChange={(event) => updateDraft(blob.url, { product_id: event.target.value, product_changed: true })} sx={{ minWidth: 260 }}>
               <MenuItem value=""><em>Select product</em></MenuItem>{detailProducts.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
             </Select></TableCell>
             <TableCell><Checkbox checked={Boolean(draft.is_primary)} onChange={(event) => updateDraft(blob.url, { is_primary: event.target.checked })} /></TableCell>
