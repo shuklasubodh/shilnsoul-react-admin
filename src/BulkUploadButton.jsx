@@ -202,6 +202,13 @@ export function BulkUploadButton({ mode }) {
           imageFailures.push({ product: 'Unmapped images', file: file.name, message: error.message })
         }
       })))
+      const storedImageCount = uploadedImages + reusedImages + unmappedUploadedImages + unmappedReusedImages
+      if (mode === 'products' && imageFiles.length && storedImageCount === 0) {
+        const firstFailure = imageFailures[0]
+        throw new Error(firstFailure
+          ? `No selected images reached Blob. ${firstFailure.file}: ${firstFailure.message}`
+          : 'No selected images reached Blob. Select the image folder again and retry.')
+      }
       const response = await fetch(`${API_URL}/bulk-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
