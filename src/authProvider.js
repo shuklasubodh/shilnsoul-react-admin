@@ -1,12 +1,6 @@
 import { HttpError } from 'react-admin'
 import { apiUrl } from './apiUrl'
-
-const TOKEN_KEY = 'admin_token'
-const IDENTITY_KEY = 'admin_identity'
-const clearSession = () => {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(IDENTITY_KEY)
-}
+import { clearAdminSession, getAdminIdentity, getAdminToken, saveAdminSession } from './session'
 
 export const authProvider = {
   login: async ({ username, password }) => {
@@ -17,23 +11,22 @@ export const authProvider = {
     })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new HttpError(payload.error || 'Login failed.', response.status, payload)
-    localStorage.setItem(TOKEN_KEY, payload.token)
-    localStorage.setItem(IDENTITY_KEY, JSON.stringify(payload.user))
+    saveAdminSession(payload)
   },
-  logout: () => { clearSession(); return Promise.resolve() },
-  checkAuth: () => localStorage.getItem(TOKEN_KEY)
+  logout: () => { clearAdminSession(); return Promise.resolve() },
+  checkAuth: () => getAdminToken()
     ? Promise.resolve()
     : Promise.reject({ redirectTo: '/login', logoutUser: false }),
   checkError: (error) => {
     if (error?.status === 401 || error?.status === 403) {
-      clearSession()
+      clearAdminSession()
       return Promise.reject()
     }
     return Promise.resolve()
   },
   getIdentity: () => {
     try {
-      const identity = JSON.parse(localStorage.getItem(IDENTITY_KEY))
+      const identity = getAdminIdentity()
       return identity?.id ? Promise.resolve(identity) : Promise.reject()
     } catch { return Promise.reject() }
   },

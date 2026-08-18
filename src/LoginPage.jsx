@@ -15,6 +15,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import artisanHero from './assets/artisan-login-hero.webp'
 import { apiUrl } from './apiUrl'
+import { saveAdminSession } from './session'
 
 export const LoginPage = () => {
   const [email, setEmail] = useState('')
@@ -35,8 +36,7 @@ export const LoginPage = () => {
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Unable to sign in. Please check your credentials.')
-      localStorage.setItem('admin_token', payload.token)
-      localStorage.setItem('admin_identity', JSON.stringify(payload.user))
+      saveAdminSession(payload)
       window.location.replace('/')
     } catch (loginError) {
       const message = loginError?.message || 'Unable to sign in. Please check your credentials.'
