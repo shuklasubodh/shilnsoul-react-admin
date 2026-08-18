@@ -135,8 +135,11 @@ export function BulkUploadButton({ mode }) {
       if (mode === 'products' && imageFiles.length) {
         try {
           const blobResponse = await fetch(`${API_URL}/blob-images`, { headers: { Authorization: `Bearer ${token}` } })
-          if (blobResponse.ok) existingBlobs = (await blobResponse.json()).blobs || []
-        } catch {
+          const blobResult = await blobResponse.json().catch(() => ({}))
+          if (!blobResponse.ok) throw new Error(blobResult.error || 'Blob storage preflight failed.')
+          existingBlobs = blobResult.blobs || []
+        } catch (error) {
+          if (/blob|storage|token/i.test(String(error.message))) throw error
           // Blob listing is an optimization; individual uploads still report failures below.
         }
       }
