@@ -244,11 +244,11 @@ export function ProductImageMapping() {
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography><strong>{blobs.length}</strong> Blob images · <strong>{mappings.length}</strong> mappings</Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 1.5 }}>
-        <Select size="small" displayEmpty value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)} sx={{ minWidth: 260 }} inputProps={{ 'aria-label': 'Filter by folder name' }}>
+        <Select size="small" displayEmpty value={folderFilter} onChange={(event) => setFolderFilter(event.target.value)} sx={{ minWidth: 260 }} aria-label="Filter by folder name">
           <MenuItem value=""><em>All folders</em></MenuItem>
           {folders.map((folder) => <MenuItem key={folder} value={folder}>{folder}</MenuItem>)}
         </Select>
-        <Select size="small" displayEmpty value={productFilter} onChange={(event) => setProductFilter(event.target.value)} sx={{ minWidth: 280 }} inputProps={{ 'aria-label': 'Filter by product' }}>
+        <Select size="small" displayEmpty value={productFilter} onChange={(event) => setProductFilter(event.target.value)} sx={{ minWidth: 280 }} aria-label="Filter by product">
           <MenuItem value=""><em>All products</em></MenuItem>
           {products.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
         </Select>
