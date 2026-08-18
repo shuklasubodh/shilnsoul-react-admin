@@ -5,8 +5,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useNotify, useRefresh } from 'react-admin'
 import { upload as uploadBlob } from '@vercel/blob/client'
 import { useNavigate } from 'react-router-dom'
-
-const API_URL = '/api'
+import { API_URL } from './apiUrl'
 
 const createLimiter = (limit) => {
   let active = 0

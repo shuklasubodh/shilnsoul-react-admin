@@ -10,11 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.7.0",
-    "bcrypt": "^6.0.0",
     "heic-to": "^1.5.2",
-    "jsonwebtoken": "^9.0.3",
     "ra-data-simple-rest": "^5.15.0",
     "react": "^19.2.8",
     "react-admin": "^5.15.1",

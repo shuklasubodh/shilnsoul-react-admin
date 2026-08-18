@@ -1,6 +1,6 @@
 import simpleRestProvider from 'ra-data-simple-rest'
 import { fetchUtils, HttpError } from 'react-admin'
-export const API_URL = '/api'
+import { API_URL } from './apiUrl'
 
 const httpClient = (url, options = {}) =>
   {

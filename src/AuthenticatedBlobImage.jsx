@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiUrl } from './apiUrl'
 
 export function AuthenticatedBlobImage({ blobUrl, alt, className, style }) {
   const [result, setResult] = useState({ blobUrl: '', source: '', failed: false })
@@ -6,7 +7,7 @@ export function AuthenticatedBlobImage({ blobUrl, alt, className, style }) {
   useEffect(() => {
     const controller = new AbortController()
     let objectUrl = ''
-    fetch(`/api/blob-content?url=${encodeURIComponent(blobUrl)}`, {
+    fetch(apiUrl(`blob-content?url=${encodeURIComponent(blobUrl)}`), {
       headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
       signal: controller.signal,
     }).then((response) => {

@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://shilnsoul-react-admin.vercel.app',
+        target: 'https://shilpnsoul-backend-admin.vercel.app',
         changeOrigin: true,
         secure: true,
       },

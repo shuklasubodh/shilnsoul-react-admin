@@ -5,9 +5,10 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import ImageSearchIcon from '@mui/icons-material/ImageSearch'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
+import { apiUrl } from './apiUrl'
 
 const apiFetch = async (path, options = {}) => {
-  const response = await fetch(`/api/${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('admin_token')}`, ...options.headers },
   })
@@ -30,7 +31,7 @@ const parallelMap = async (items, limit, task) => {
 }
 
 const imageFingerprint = async (blob) => {
-  const response = await fetch(`/api/blob-content?url=${encodeURIComponent(blob.url)}`, {
+  const response = await fetch(apiUrl(`blob-content?url=${encodeURIComponent(blob.url)}`), {
     headers: { Authorization: `Bearer ${localStorage.getItem('admin_token')}` },
   })
   if (!response.ok) throw new Error(`Could not read ${blob.pathname}`)

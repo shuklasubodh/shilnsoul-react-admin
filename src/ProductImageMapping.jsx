@@ -9,10 +9,11 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import BuildIcon from '@mui/icons-material/Build'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
+import { apiUrl } from './apiUrl'
 
 const apiFetch = async (path, options = {}) => {
   const token = localStorage.getItem('admin_token')
-  const response = await fetch(`/api/${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers },
   })

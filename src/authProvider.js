@@ -1,4 +1,5 @@
 import { HttpError } from 'react-admin'
+import { apiUrl } from './apiUrl'
 
 const TOKEN_KEY = 'admin_token'
 const IDENTITY_KEY = 'admin_identity'
@@ -9,7 +10,7 @@ const clearSession = () => {
 
 export const authProvider = {
   login: async ({ username, password }) => {
-    const response = await fetch('/api/auth/login', {
+    const response = await fetch(apiUrl('auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ email: username, password }),

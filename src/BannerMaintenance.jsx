@@ -7,9 +7,10 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import SaveIcon from '@mui/icons-material/Save'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
+import { apiUrl } from './apiUrl'
 
 const apiFetch = async (path, options = {}) => {
-  const response = await fetch(`/api/${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('admin_token')}`, ...options.headers },
   })
@@ -80,7 +81,7 @@ export function BannerMaintenance() {
       const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(file.name)}`
       blob = await uploadBlob(`banner/${uniqueName}`, file, {
         access: 'public',
-        handleUploadUrl: '/api/blob-upload',
+        handleUploadUrl: apiUrl('blob-upload'),
         clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
       })
       await apiFetch('banners', { method: 'POST', body: JSON.stringify({ ...form, blob_url: blob.url, blob_pathname: blob.pathname }) })
@@ -111,7 +112,7 @@ export function BannerMaintenance() {
         const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(item.file.name)}`
         blob = await uploadBlob(`banner/${uniqueName}`, item.file, {
           access: 'public',
-          handleUploadUrl: '/api/blob-upload',
+          handleUploadUrl: apiUrl('blob-upload'),
           clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
         })
         await apiFetch('banners', {

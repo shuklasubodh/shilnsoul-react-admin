@@ -14,6 +14,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import artisanHero from './assets/artisan-login-hero.webp'
+import { apiUrl } from './apiUrl'
 
 export const LoginPage = () => {
   const [email, setEmail] = useState('')
@@ -27,7 +28,7 @@ export const LoginPage = () => {
     setError('')
     setLoading(true)
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(apiUrl('auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
