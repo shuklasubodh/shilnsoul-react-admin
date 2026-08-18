@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Title, useNotify } from 'react-admin'
 import {
   Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Paper,
-  Select, Table, TableBody, TableCell, TableHead, TableRow, Typography,
+  Select, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
@@ -39,6 +39,7 @@ export function ProductImageMapping() {
   const [unmappedOnly, setUnmappedOnly] = useState(false)
   const [folderFilter, setFolderFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
+  const [pathnameSearch, setPathnameSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,9 +78,10 @@ export function ProductImageMapping() {
     const mapping = mappedByUrl.get(blob.url)
     if (unmappedOnly && mapping) return false
     if (productFilter && !unmappedOnly && !mappingByProductUrl.has(`${productFilter}|${blob.url}`)) return false
+    if (pathnameSearch.trim() && !blob.pathname.toLowerCase().includes(pathnameSearch.trim().toLowerCase())) return false
     const folder = blob.pathname.split('/').slice(0, -1).join('/')
     return !folderFilter || folder === folderFilter
-  }), [blobs, folderFilter, mappedByUrl, mappingByProductUrl, productFilter, unmappedOnly])
+  }), [blobs, folderFilter, mappedByUrl, mappingByProductUrl, pathnameSearch, productFilter, unmappedOnly])
   const detailProducts = products
   const selectedUrlSet = useMemo(() => new Set(selectedUrls), [selectedUrls])
   const selectedProduct = useMemo(() => products.find((product) => String(product.id) === productFilter), [productFilter, products])
@@ -252,6 +254,14 @@ export function ProductImageMapping() {
           <MenuItem value=""><em>All products</em></MenuItem>
           {products.map((product) => <MenuItem key={product.id} value={String(product.id)}>{product.name} ({product.sku})</MenuItem>)}
         </Select>
+        <TextField
+          size="small"
+          label="Search Blob pathname"
+          value={pathnameSearch}
+          onChange={(event) => setPathnameSearch(event.target.value)}
+          placeholder="Type any part of a pathname"
+          sx={{ minWidth: 300 }}
+        />
         <FormControlLabel control={<Checkbox checked={unmappedOnly} onChange={(event) => setUnmappedOnly(event.target.checked)} />} label="Show unmapped images only" />
         <Typography variant="body2" color="text.secondary">{visibleBlobs.length} shown</Typography>
         <Button variant="contained" onClick={saveSelected} disabled={savingMultiple || selectedUrls.length === 0}>
