@@ -522,7 +522,7 @@ export default async function handler(request, response) {
         const savedBlobUrl = movedBlob.url
         const savedBlobPathname = movedBlob.pathname || blobPathname
         const previousOwners = await sql.query('DELETE FROM product_images WHERE blob_url = $1 AND product_id <> $2 RETURNING product_id', [savedBlobUrl, productId])
-        for (const previousOwner of previousOwners) await syncProductImageUrls(sql, previousOwner.product_id)
+        for (const previousProductId of new Set(previousOwners.map((owner) => owner.product_id))) await syncProductImageUrls(sql, previousProductId)
         if (isPrimary) await sql.query('UPDATE product_images SET is_primary = FALSE, updated_at = NOW() WHERE product_id = $1', [productId])
         const rows = await sql.query(`
           INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
@@ -625,27 +625,42 @@ export default async function handler(request, response) {
 
         if (mergedImages.length) {
           const incomingBlobByUrl = new Map((Array.isArray(product.image_blobs) ? product.image_blobs : []).map((blob) => [blob.url, blob]))
+          const targetFolder = `products/${resolvedSlug}`
+          const imageMappings = []
           for (let imageIndex = 0; imageIndex < mergedImages.length; imageIndex += 1) {
             let imageUrl = mergedImages[imageIndex]
             let blobPathname = incomingBlobByUrl.get(imageUrl)?.pathname || ''
-            if (incomingBlobByUrl.has(imageUrl)) {
-              const movedBlob = await moveProductBlob(imageUrl, `products/${resolvedSlug}`)
+            if (incomingBlobByUrl.has(imageUrl) && !blobPathname.startsWith(`${targetFolder}/`)) {
+              const movedBlob = await moveProductBlob(imageUrl, targetFolder)
               if (movedBlob.url !== imageUrl) await replaceMappedBlob(sql, imageUrl, movedBlob)
               imageUrl = movedBlob.url
               blobPathname = movedBlob.pathname
               mergedImages[imageIndex] = imageUrl
-              const previousOwners = await sql.query('DELETE FROM product_images WHERE blob_url = $1 AND product_id <> $2 RETURNING product_id', [imageUrl, productId])
-              for (const previousOwner of previousOwners) await syncProductImageUrls(sql, previousOwner.product_id)
             }
-            await sql.query(`
-              INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
-              VALUES ($1, $2, $3, $4, FALSE)
-              ON CONFLICT (product_id, blob_url) DO UPDATE SET
-                blob_pathname = CASE WHEN EXCLUDED.blob_pathname <> '' THEN EXCLUDED.blob_pathname ELSE product_images.blob_pathname END,
-                sort_order = EXCLUDED.sort_order,
-                updated_at = NOW()
-            `, [productId, imageUrl, blobPathname, imageIndex])
+            imageMappings.push({ imageUrl, blobPathname, imageIndex })
           }
+
+          const mappedUrls = imageMappings.map((mapping) => mapping.imageUrl)
+          const previousOwners = await sql.query(
+            'DELETE FROM product_images WHERE blob_url = ANY($1::text[]) AND product_id <> $2 RETURNING product_id',
+            [mappedUrls, productId],
+          )
+          for (const previousProductId of new Set(previousOwners.map((owner) => owner.product_id))) await syncProductImageUrls(sql, previousProductId)
+
+          const mappingValues = []
+          const mappingPlaceholders = imageMappings.map((mapping, index) => {
+            const offset = index * 4
+            mappingValues.push(productId, mapping.imageUrl, mapping.blobPathname, mapping.imageIndex)
+            return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, FALSE)`
+          })
+          await sql.query(`
+            INSERT INTO product_images (product_id, blob_url, blob_pathname, sort_order, is_primary)
+            VALUES ${mappingPlaceholders.join(', ')}
+            ON CONFLICT (product_id, blob_url) DO UPDATE SET
+              blob_pathname = CASE WHEN EXCLUDED.blob_pathname <> '' THEN EXCLUDED.blob_pathname ELSE product_images.blob_pathname END,
+              sort_order = EXCLUDED.sort_order,
+              updated_at = NOW()
+          `, mappingValues)
           await syncProductImageUrls(sql, productId)
         }
       }
@@ -767,6 +782,10 @@ export default async function handler(request, response) {
     response.setHeader('Allow', 'GET,POST,PUT,DELETE,OPTIONS')
     return json(response, 405, { error: 'Method not allowed.' })
   } catch (error) {
+    console.error(`[api:${resourceName || 'unknown'}] request failed`, { message: error.message, code: error.code, stack: error.stack })
+    if (resourceName === 'bulk-import' && !error.code) {
+      return json(response, 500, { error: `Bulk import failed: ${error.message || 'unknown storage error'}` })
+    }
     return databaseError(response, error)
   }
 }
