@@ -106,7 +106,7 @@ export function ProductImageMapping() {
     setSavingUrl(blob.url)
     try {
       await saveMapping(blob, productId)
-      notify('Image mapped to product.', { type: 'success' })
+      notify('Image mapped and moved to the product folder.', { type: 'success' })
       await load()
     } catch (saveError) {
       notify(saveError.message, { type: 'error' })
@@ -125,7 +125,7 @@ export function ProductImageMapping() {
       for (const blob of selectedBlobs) {
         await saveMapping(blob, drafts[blob.url].product_id)
       }
-      notify(`${selectedBlobs.length} images mapped to products.`, { type: 'success' })
+      notify(`${selectedBlobs.length} images mapped and moved to their product folders.`, { type: 'success' })
       setSelectedUrls([])
       await load()
     } catch (saveError) {
@@ -145,7 +145,7 @@ export function ProductImageMapping() {
     setSavingUrl(blob.url)
     try {
       await apiFetch(`product-images/${mapping.id}`, { method: 'DELETE' })
-      notify('Image mapping removed. The Blob file was not deleted.', { type: 'success' })
+      notify('Image mapping removed. If no other product uses it, the Blob was moved to the unmapped folder.', { type: 'success' })
       await load()
     } catch (removeError) {
       notify(removeError.message, { type: 'error' })
@@ -165,7 +165,7 @@ export function ProductImageMapping() {
       catch (unmapError) { failures.push(unmapError.message) }
     }
     setSelectedUrls([])
-    notify(failures.length ? `${selectedMappings.length - failures.length} mappings removed; ${failures.length} failed.` : `${selectedMappings.length} mappings removed. Blob files were kept.`, { type: failures.length ? 'warning' : 'success' })
+    notify(failures.length ? `${selectedMappings.length - failures.length} mappings removed; ${failures.length} failed.` : `${selectedMappings.length} mappings removed. Images with no remaining product mapping were moved to the unmapped folder.`, { type: failures.length ? 'warning' : 'success' })
     setUnmappingMultiple(false)
     await load()
   }
@@ -226,7 +226,7 @@ export function ProductImageMapping() {
     setRepairing(true)
     try {
       const result = await apiFetch('image-repair', { method: 'POST' })
-      notify(`Repair complete: ${result.repaired_mappings} mappings repaired, ${result.removed_stale_mappings} stale mappings removed, ${result.created_mappings} mappings created, ${result.updated_products} products updated, ${result.assigned_primaries} primary images assigned.`, { type: 'success' })
+      notify(`Repair complete: ${result.repaired_mappings} mappings repaired, ${result.removed_stale_mappings} stale mappings removed, ${result.created_mappings} mappings created, ${result.updated_products} products updated, ${result.assigned_primaries} primary images assigned, ${result.organized_blobs || 0} Blob images moved into slug/unmapped folders.`, { type: 'success' })
       await load()
     } catch (repairError) {
       notify(repairError.message, { type: 'error' })
@@ -238,7 +238,7 @@ export function ProductImageMapping() {
   return <Box className="image-mapping-page">
     <Title title="Product image mapping" />
     <Box className="image-mapping-header">
-      <Box><Typography variant="h4">Product image mapping</Typography><Typography color="text.secondary">Assign public Blob images under products/ to catalog products.</Typography></Box>
+      <Box><Typography variant="h4">Product image mapping</Typography><Typography color="text.secondary">Mapped images are stored in a folder named from the product slug; only images without a product mapping remain under products/unmapped/.</Typography></Box>
       <Box sx={{ display: 'flex', gap: 1 }}><Button startIcon={<BuildIcon />} onClick={repairImages} disabled={loading || repairing}>{repairing ? 'Repairing…' : 'Repair image references'}</Button><Button startIcon={<RefreshIcon />} onClick={load} disabled={loading || repairing}>Refresh</Button></Box>
     </Box>
     {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}

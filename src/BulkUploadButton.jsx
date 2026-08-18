@@ -90,11 +90,15 @@ export function BulkUploadButton({ mode }) {
   }
 
   const safeFileName = (name) => String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
-  const blobPathFor = async (product, file) => {
+  const blobIdentityFor = async (product, file) => {
     const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
     const hash = [...new Uint8Array(digest)].slice(0, 12).map((byte) => byte.toString(16).padStart(2, '0')).join('')
-    return `products/${product.slug}/${hash}-${safeFileName(file.name)}`
+    return { hash, pathname: `products/${product.slug}/${hash}-${safeFileName(file.name)}` }
   }
+  const previouslyUploadedBlob = (existingBlobs, hash, file) => existingBlobs.find((blob) => {
+    const blobName = blob.pathname.split('/').at(-1)?.toLowerCase() || ''
+    return blobName.startsWith(`${hash}-`) && (!Number(blob.size) || Number(blob.size) === file.size)
+  })
   const legacyBlobFor = (existingBlobs, product, file) => {
     const folder = `products/${product.slug}/`
     const safeName = safeFileName(file.name)
@@ -156,8 +160,8 @@ export function BulkUploadButton({ mode }) {
           const imageBlobs = (await Promise.all(matchedFiles.map((file, fileIndex) => runImageTask(async () => {
             setUploadProgress(`Checking image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
             try {
-              const pathname = await blobPathFor(product, file)
-              const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, file)
+              const { hash, pathname } = await blobIdentityFor(product, file)
+              const existingBlob = previouslyUploadedBlob(existingBlobs, hash, file) || blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, file)
               if (existingBlob) {
                 reusedImages += 1
                 return { url: existingBlob.url, pathname: existingBlob.pathname }
@@ -183,10 +187,10 @@ export function BulkUploadButton({ mode }) {
       ) : []
       const unmappedFiles = mode === 'products' ? imageFiles.filter((file) => !matchedFileSet.has(file)) : []
       await Promise.all(unmappedFiles.map((file, fileIndex) => runImageTask(async () => {
-        setUploadProgress(`Uploading unmatched image ${fileIndex + 1} of ${unmappedFiles.length} for manual mapping`)
+        setUploadProgress(`Checking unmatched image ${fileIndex + 1} of ${unmappedFiles.length} for manual mapping`)
         try {
-          const pathname = await blobPathFor({ slug: 'unmapped' }, file)
-          const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, { slug: 'unmapped' }, file)
+          const { hash, pathname } = await blobIdentityFor({ slug: 'unmapped' }, file)
+          const existingBlob = previouslyUploadedBlob(existingBlobs, hash, file) || blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, { slug: 'unmapped' }, file)
           if (existingBlob) {
             unmappedReusedImages += 1
             return
