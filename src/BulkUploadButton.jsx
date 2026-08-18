@@ -240,9 +240,13 @@ export function BulkUploadButton({ mode }) {
         {uploadProgress ? <Typography variant="body2" sx={{ mb: 2 }}>{uploadProgress}</Typography> : null}
         {uploadError ? <Alert severity="error" sx={{ mb: 2 }}>{uploadError}</Alert> : null}
         {preview ? <>
-          {mode === 'products' && preview.products.some((product) => product.image_reference) ? <Alert severity={imageFiles.length ? 'success' : 'info'} sx={{ mb: 2 }}
+          {mode === 'products' ? <Alert severity={imageFiles.length ? 'success' : 'info'} sx={{ mb: 2 }}
             action={<Button startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={uploading}>Select image folder</Button>}
-          >{imageFiles.length ? `${imageFiles.length} image files selected. Folder references will be matched during upload.` : 'The workbook contains local image paths. Select their common parent folder to upload all product images.'}</Alert> : null}
+          >{imageFiles.length
+              ? `${imageFiles.length} image files selected. Folder references will be matched during upload; files without a product match will be stored under products/unmapped.`
+              : preview.products.some((product) => product.image_reference)
+                ? 'Select the common parent folder for the image paths in this workbook.'
+                : 'Optionally select an image folder. Without workbook image references, the images will be stored under products/unmapped for manual mapping.'}</Alert> : null}
           {unmatchedImageProducts.length ? <Alert severity="warning" sx={{ mb: 2 }}>
             No images matched {unmatchedImageProducts.length} products: {unmatchedImageProducts.slice(0, 8).map((product) => product.image_reference).join(', ')}{unmatchedImageProducts.length > 8 ? ', …' : ''}. The products will be uploaded without automatic image mappings; unmatched selected files will still upload under products/unmapped for manual mapping.
           </Alert> : null}
