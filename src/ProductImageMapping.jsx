@@ -22,6 +22,11 @@ const apiFetch = async (path, options = {}) => {
   return body
 }
 
+const isBlobFile = (blob) => {
+  const pathname = String(blob?.pathname || '').replace(/\/+$/, '')
+  return pathname !== 'products' && pathname !== 'products/unmapped'
+}
+
 export function ProductImageMapping() {
   const notify = useNotify()
   const [products, setProducts] = useState([])
@@ -50,9 +55,10 @@ export function ProductImageMapping() {
         apiFetch(`products?${query}`), apiFetch('blob-images'), apiFetch('product-images'),
       ])
       setProducts(productRows)
-      setBlobs(blobResult.blobs || [])
+      const imageBlobs = (blobResult.blobs || []).filter(isBlobFile)
+      setBlobs(imageBlobs)
       setMappings(mappingRows)
-      setDrafts(Object.fromEntries((blobResult.blobs || []).map((blob) => {
+      setDrafts(Object.fromEntries(imageBlobs.map((blob) => {
         const mapping = mappingRows.find((item) => item.blob_url === blob.url)
         return [blob.url, {
           product_id: mapping ? String(mapping.product_id) : '',
