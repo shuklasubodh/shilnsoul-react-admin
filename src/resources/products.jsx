@@ -5,16 +5,27 @@ import {
   SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
   TopToolbar, WrapperField,
 } from 'react-admin'
-import { Box, ImageList, ImageListItem } from '@mui/material'
+import { Box, ImageList, ImageListItem, Stack, Typography } from '@mui/material'
 import { ScopePanel } from '../Dashboard'
 import { BulkUploadButton } from '../BulkUploadButton'
 
 const ProductActions = () => <TopToolbar><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
 const ProductBulkActions = () => <BulkDeleteButton mutationMode="pessimistic" />
+const ProductEmpty = () => (
+  <Stack alignItems="center" spacing={2} sx={{ py: 8 }}>
+    <Typography variant="h5">No products yet</Typography>
+    <Typography color="text.secondary">Upload a spreadsheet or add a product manually.</Typography>
+    <Stack direction="row" spacing={1}>
+      <BulkUploadButton mode="products" />
+      <CreateButton label="Add product" />
+    </Stack>
+  </Stack>
+)
 
 const ProductList = () => (
   <List
     actions={<ProductActions />}
+    empty={<ProductEmpty />}
     filters={[<SearchInput key="search" source="q" placeholder="Search / filter by category" alwaysOn />]}
     sort={{ field: 'id', order: 'ASC' }}
   >
