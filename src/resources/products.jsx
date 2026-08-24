@@ -2,10 +2,11 @@
 import {
   BooleanField, BooleanInput, BulkDeleteButton, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
-  SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
-  TopToolbar, WrapperField,
+  SaveButton, SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
+  Toolbar, TopToolbar, WrapperField,
 } from 'react-admin'
-import { Box, ImageList, ImageListItem, Stack, Typography } from '@mui/material'
+import { Box, Button, ImageList, ImageListItem, Stack, Typography } from '@mui/material'
+import { useNavigate } from 'react-router-dom'
 import { ScopePanel } from '../Dashboard'
 import { BulkUploadButton } from '../BulkUploadButton'
 
@@ -26,7 +27,12 @@ const ProductList = () => (
   <List
     actions={<ProductActions />}
     empty={<ProductEmpty />}
-    filters={[<SearchInput key="search" source="q" placeholder="Search / filter by category" alwaysOn />]}
+    filters={[
+      <SearchInput key="search" source="q" placeholder="Search products" alwaysOn />,
+      <ReferenceInput key="category" source="category_id" reference="categories" label="Category" alwaysOn>
+        <SelectInput optionText="name" label="Category" />
+      </ReferenceInput>,
+    ]}
     sort={{ field: 'id', order: 'ASC' }}
   >
     <Box>
@@ -42,8 +48,19 @@ const ProductList = () => (
   </List>
 )
 
-const ProductForm = () => (
-  <SimpleForm>
+const ProductEditToolbar = () => {
+  const navigate = useNavigate()
+
+  return (
+    <Toolbar>
+      <SaveButton />
+      <Button type="button" onClick={() => navigate('/products')}>Cancel</Button>
+    </Toolbar>
+  )
+}
+
+const ProductForm = ({ toolbar }) => (
+  <SimpleForm toolbar={toolbar}>
     <TextInput source="name" validate={required()} /><TextInput source="slug" />
     <TextInput source="sku" validate={required()} />
     <ReferenceInput source="category_id" reference="categories"><SelectInput optionText="name" validate={required()} /></ReferenceInput>
@@ -66,6 +83,6 @@ const ProductShow = () => (
 export const productResource = {
   list: ProductList,
   create: () => <Create><ProductForm /></Create>,
-  edit: () => <Edit mutationMode="pessimistic"><ProductForm /></Edit>,
+  edit: () => <Edit mutationMode="pessimistic"><ProductForm toolbar={<ProductEditToolbar />} /></Edit>,
   show: ProductShow,
 }
