@@ -17,6 +17,7 @@ import { ProductImageMapping } from './ProductImageMapping'
 import { ImageMaintenance } from './ImageMaintenance'
 import { MediaConversion } from './MediaConversion'
 import { BannerMaintenance } from './BannerMaintenance'
+import { ProductDescriptionUpload } from './ProductDescriptionUpload'
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
         <Route path="/image-maintenance" element={<ImageMaintenance />} />
         <Route path="/media-conversion" element={<MediaConversion />} />
         <Route path="/banner-maintenance" element={<BannerMaintenance />} />
+        <Route path="/product-descriptions" element={<ProductDescriptionUpload />} />
       </CustomRoutes>
     </Admin>
   )

@@ -11,6 +11,7 @@ import InventoryIcon from '@mui/icons-material/Inventory2'
 import ImageSearchIcon from '@mui/icons-material/ImageSearch'
 import TransformIcon from '@mui/icons-material/Transform'
 import PanoramaIcon from '@mui/icons-material/Panorama'
+import DescriptionIcon from '@mui/icons-material/Description'
 
 const AdminAppBar = (props) => (
   <AppBar {...props} className="admin-app-bar">
@@ -25,6 +26,7 @@ const AdminMenu = () => (
     <DashboardMenuItem />
     <Typography className="admin-menu-section">Products</Typography>
     <MenuItemLink className="admin-product-submenu" to="/products" primaryText="Product Maintenance" leftIcon={<InventoryIcon />} />
+    <MenuItemLink className="admin-product-submenu" to="/product-descriptions" primaryText="Product Descriptions" leftIcon={<DescriptionIcon />} />
     <MenuItemLink className="admin-product-submenu" to="/product-images" primaryText="Product Image Mapping" leftIcon={<CollectionsIcon />} />
     <MenuItemLink className="admin-product-submenu" to="/image-maintenance" primaryText="Image Maintenance" leftIcon={<ImageSearchIcon />} />
     <MenuItemLink className="admin-product-submenu" to="/media-conversion" primaryText="Convert Media to JPG" leftIcon={<TransformIcon />} />
