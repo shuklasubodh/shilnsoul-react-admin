@@ -170,14 +170,12 @@ export function ProductDescriptionUpload() {
     try {
       const existingRecords = await loadDescriptionRecords()
       await Promise.all(matched.map(({ product, description, fields }) => {
-        const existing = existingRecords.find((record) => String(record.product_id) === String(product.id)
-          || String(record.product_code ?? record.sku ?? '').trim().toLowerCase() === String(product.sku).trim().toLowerCase())
+        const existing = existingRecords.find((record) => String(record.product_id) === String(product.id))
         const data = {
-          ...(existing || {}),
-          ...fields,
-          product_id: product.id,
-          product_code: product.sku,
-          description,
+          ...(existing || {}), ...fields, product_id: product.id,
+          title: fields.title || fields.name_of_product || product.name,
+          color_description: fields.color_description || fields.color,
+          catalogue_description: fields.catalogue_description || description,
         }
         return existing
           ? dataProvider.update('product-descriptions', { id: existing.id, data, previousData: existing })
