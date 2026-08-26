@@ -21,8 +21,7 @@ const httpClient = (url, options = {}) =>
   }
 
 const restProvider = simpleRestProvider(API_URL, httpClient, 'X-Total-Count')
-const publicRestProvider = simpleRestProvider('/api', httpClient, 'X-Total-Count')
-const providerFor = (resource) => resource === 'product-colors' ? publicRestProvider : restProvider
+const providerFor = () => restProvider
 const singular = { users: 'user', products: 'product', categories: 'category', orders: 'order', 'product-descriptions': 'product_description' }
 const unwrapRecord = (resource, response) => response?.data?.[singular[resource]]
   || response?.data
