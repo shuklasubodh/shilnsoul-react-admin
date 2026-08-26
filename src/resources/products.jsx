@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import {
-  BooleanField, BooleanInput, BulkDeleteButton, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FunctionField,
+  BooleanField, BooleanInput, BulkDeleteButton, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FormDataConsumer, FunctionField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
   SaveButton, SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
-  Toolbar, TopToolbar, WrapperField,
+  Toolbar, TopToolbar, useDataProvider, useNotify, useRecordContext, WrapperField,
 } from 'react-admin'
+import { useRef } from 'react'
 import { Box, Button, ImageList, ImageListItem, Stack, Typography } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import DescriptionIcon from '@mui/icons-material/Description'
@@ -58,24 +59,53 @@ const ProductEditToolbar = () => {
 
   return (
     <Toolbar>
-      <SaveButton />
+      <SaveButton alwaysEnable label="Save All" />
       <Button type="button" onClick={() => navigate('/products')}>Cancel</Button>
     </Toolbar>
   )
 }
 
-const ProductForm = ({ toolbar }) => (
-  <SimpleForm toolbar={toolbar}>
+const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
+  <SimpleForm toolbar={toolbar} onSubmit={onSubmit}>
     <TextInput source="name" validate={required()} /><TextInput source="slug" />
     <TextInput source="sku" validate={required()} />
     <ReferenceInput source="category_id" reference="categories"><SelectInput optionText="name" validate={required()} /></ReferenceInput>
     <TextInput source="supplier_name" label="Supplier Name" />
-    <ProductRelatedFields editableColors />
+    <FormDataConsumer>
+      {({ formData }) => (
+        <ProductRelatedFields ref={relatedRef} editableColors stockQuantity={formData.stock_quantity} />
+      )}
+    </FormDataConsumer>
     <NumberInput source="price" min={0} validate={required()} />
     <NumberInput source="stock_quantity" min={0} defaultValue={0} /><TextInput source="image_url" type="url" />
     <BooleanInput source="is_active" defaultValue />
   </SimpleForm>
 )
+
+const ProductEditForm = () => {
+  const relatedRef = useRef(null)
+  const dataProvider = useDataProvider()
+  const notify = useNotify()
+  const record = useRecordContext()
+  const navigate = useNavigate()
+
+  const saveProductAndRelatedRecords = async (values) => {
+    try {
+      await relatedRef.current?.saveAll()
+      await dataProvider.update('products', {
+        id: record.id,
+        data: values,
+        previousData: record,
+      })
+      notify('Product, description and colors updated.', { type: 'success' })
+      navigate('/products')
+    } catch (error) {
+      notify(error?.message || 'Product could not be updated.', { type: 'error' })
+    }
+  }
+
+  return <ProductForm toolbar={<ProductEditToolbar />} relatedRef={relatedRef} onSubmit={saveProductAndRelatedRecords} />
+}
 
 const ProductShow = () => (
   <Show><SimpleShowLayout>
@@ -90,6 +120,6 @@ const ProductShow = () => (
 export const productResource = {
   list: ProductList,
   create: () => <Create><ProductForm /></Create>,
-  edit: () => <Edit mutationMode="pessimistic"><ProductForm toolbar={<ProductEditToolbar />} /></Edit>,
+  edit: () => <Edit mutationMode="pessimistic"><ProductEditForm /></Edit>,
   show: ProductShow,
 }

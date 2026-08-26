@@ -22,7 +22,14 @@ const httpClient = (url, options = {}) =>
 
 const restProvider = simpleRestProvider(API_URL, httpClient, 'X-Total-Count')
 const providerFor = () => restProvider
-const singular = { users: 'user', products: 'product', categories: 'category', orders: 'order', 'product-descriptions': 'product_description' }
+const singular = {
+  users: 'user',
+  products: 'product',
+  categories: 'category',
+  orders: 'order',
+  'product-descriptions': 'product_description',
+  'product-colors': 'product_color',
+}
 const unwrapRecord = (resource, response) => response?.data?.[singular[resource]]
   || response?.data
 const normalizeRecord = (resource, record) => resource === 'users' && record
