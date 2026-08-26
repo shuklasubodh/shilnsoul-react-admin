@@ -23,8 +23,8 @@ export function ProductRelatedFields({ editableColors = false }) {
     if (!product?.id) return undefined
     let active = true
     Promise.all([
-      dataProvider.getList('products_desccription', listParams),
-      dataProvider.getList('product_color', listParams),
+      dataProvider.getList('product-descriptions', listParams),
+      dataProvider.getList('product-colors', listParams),
     ]).then(([descriptionResult, colorResult]) => {
       if (!active) return
       const nextDescriptions = descriptionResult.data.filter((item) => belongsToProduct(item, product))
@@ -52,16 +52,16 @@ export function ProductRelatedFields({ editableColors = false }) {
         const existing = colorRecords[index]
         if (existing) {
           const field = colorField(existing)
-          return dataProvider.update('product_color', {
+          return dataProvider.update('product-colors', {
             id: existing.id, data: { ...existing, ...common, [field]: value }, previousData: existing,
           })
         }
-        return dataProvider.create('product_color', { data: { ...common, color: value } })
+        return dataProvider.create('product-colors', { data: { ...common, color: value, quantity: 0 } })
       }))
       await Promise.all(colorRecords.slice(nextColors.length).map((record) =>
-        dataProvider.delete('product_color', { id: record.id, previousData: record }),
+        dataProvider.delete('product-colors', { id: record.id, previousData: record }),
       ))
-      const result = await dataProvider.getList('product_color', listParams)
+      const result = await dataProvider.getList('product-colors', listParams)
       const refreshed = result.data.filter((item) => belongsToProduct(item, product))
       setColorRecords(refreshed)
       setColorsText(refreshed.map(colorValue).filter(Boolean).join(', '))

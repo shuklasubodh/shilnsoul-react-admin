@@ -21,9 +21,10 @@ const httpClient = (url, options = {}) =>
   }
 
 const restProvider = simpleRestProvider(API_URL, httpClient, 'X-Total-Count')
-const singular = { users: 'user', products: 'product', categories: 'category', orders: 'order', products_desccription: 'product_description', product_color: 'product_color' }
+const publicRestProvider = simpleRestProvider('/api', httpClient, 'X-Total-Count')
+const providerFor = (resource) => resource === 'product-colors' ? publicRestProvider : restProvider
+const singular = { users: 'user', products: 'product', categories: 'category', orders: 'order', 'product-descriptions': 'product_description' }
 const unwrapRecord = (resource, response) => response?.data?.[singular[resource]]
-  || (resource === 'products_desccription' ? response?.data?.products_desccription : null)
   || response?.data
 const normalizeRecord = (resource, record) => resource === 'users' && record
   ? { ...record, is_active: ['y', '1', 'true'].includes(String(record.is_active).toLowerCase()) }
@@ -38,19 +39,19 @@ const prepareData = (_resource, data) => data
 
 export const dataProvider = {
   ...restProvider,
-  getList: (resource, params) => restProvider.getList(resource, params).then((response) => normalizeResponse(resource, response)),
-  getOne: (resource, params) => restProvider.getOne(resource, params).then((response) => normalizeResponse(resource, response)),
-  getMany: (resource, params) => restProvider.getMany(resource, params).then((response) => normalizeResponse(resource, response)),
-  getManyReference: (resource, params) => restProvider.getManyReference(resource, params).then((response) => normalizeResponse(resource, response)),
-  create: (resource, params) => restProvider.create(resource, { ...params, data: prepareData(resource, params.data) }).then((response) => ({
+  getList: (resource, params) => providerFor(resource).getList(resource, params).then((response) => normalizeResponse(resource, response)),
+  getOne: (resource, params) => providerFor(resource).getOne(resource, params).then((response) => normalizeResponse(resource, response)),
+  getMany: (resource, params) => providerFor(resource).getMany(resource, params).then((response) => normalizeResponse(resource, response)),
+  getManyReference: (resource, params) => providerFor(resource).getManyReference(resource, params).then((response) => normalizeResponse(resource, response)),
+  create: (resource, params) => providerFor(resource).create(resource, { ...params, data: prepareData(resource, params.data) }).then((response) => ({
     ...response,
     data: normalizeRecord(resource, unwrapRecord(resource, response)),
   })),
-  update: (resource, params) => restProvider.update(resource, { ...params, data: prepareData(resource, params.data) }).then((response) => ({
+  update: (resource, params) => providerFor(resource).update(resource, { ...params, data: prepareData(resource, params.data) }).then((response) => ({
     ...response,
     data: normalizeRecord(resource, unwrapRecord(resource, response)),
   })),
-  delete: (resource, params) => restProvider.delete(resource, params).then((response) => ({
+  delete: (resource, params) => providerFor(resource).delete(resource, params).then((response) => ({
     ...response,
     data: response.data?.id ? response.data : { ...params.previousData, id: params.id },
   })),

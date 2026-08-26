@@ -116,7 +116,7 @@ export function ProductDescriptionUpload() {
   }
 
   const loadDescriptionRecords = async () => {
-    const result = await dataProvider.getList('products_desccription', {
+    const result = await dataProvider.getList('product-descriptions', {
       pagination: { page: 1, perPage: 10000 }, sort: { field: 'id', order: 'DESC' }, filter: {},
     })
     setDescriptionRecords(result.data)
@@ -180,8 +180,8 @@ export function ProductDescriptionUpload() {
           description,
         }
         return existing
-          ? dataProvider.update('products_desccription', { id: existing.id, data, previousData: existing })
-          : dataProvider.create('products_desccription', { data })
+          ? dataProvider.update('product-descriptions', { id: existing.id, data, previousData: existing })
+          : dataProvider.create('product-descriptions', { data })
       }))
       notify(`${matched.length} product description${matched.length === 1 ? '' : 's'} updated.`, { type: 'success' })
       await Promise.all([loadProducts(), loadDescriptionRecords()])
