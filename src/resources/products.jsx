@@ -70,7 +70,7 @@ const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
     <TextInput source="name" validate={required()} /><TextInput source="slug" />
     <TextInput source="sku" validate={required()} />
     <ReferenceInput source="category_id" reference="categories"><SelectInput optionText="name" validate={required()} /></ReferenceInput>
-    <TextInput source="supplier_name" label="Supplier Name" />
+    <TextInput source="description" label="Supplier Name" />
     <FormDataConsumer>
       {({ formData }) => (
         <ProductRelatedFields ref={relatedRef} editableColors stockQuantity={formData.stock_quantity} />
@@ -112,7 +112,7 @@ const ProductShow = () => (
     <TextField source="id" /><FunctionField label="Images" render={(record) => <ImageList cols={4} sx={{ maxWidth: 720 }}>
       {(record.images?.length ? record.images : record.image_url ? [record.image_url] : []).map((url) => <ImageListItem key={url}><img src={url} alt={record.name} loading="lazy" /></ImageListItem>)}
     </ImageList>} /><TextField source="name" />
-    <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="supplier_name" label="Supplier Name" />
+    <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="description" label="Supplier Name" />
     <ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><BooleanField source="is_active" />
   </SimpleShowLayout></Show>
 )
