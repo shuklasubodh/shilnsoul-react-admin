@@ -19,6 +19,21 @@ import { MediaConversion } from './MediaConversion'
 import { BannerMaintenance } from './BannerMaintenance'
 import { ProductDescriptionUpload } from './ProductDescriptionUpload'
 
+const adminTheme = {
+  palette: {
+    primary: { main: '#183650' },
+    secondary: { main: '#258781' },
+    background: { default: '#f7f9fb', paper: '#ffffff' },
+    text: { primary: '#243b53', secondary: '#66727f' },
+  },
+  sidebar: { width: 170, closedWidth: 54 },
+  shape: { borderRadius: 2 },
+  typography: { fontFamily: 'Inter, "Segoe UI", Arial, sans-serif' },
+}
+
+const userRecordRepresentation = (record) =>
+  `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.email
+
 function App() {
   return (
     <Admin
@@ -29,22 +44,12 @@ function App() {
       loginPage={LoginPage}
       requireAuth
       title="React Admin - Product Management"
-      theme={{
-        palette: {
-          primary: { main: '#183650' },
-          secondary: { main: '#258781' },
-          background: { default: '#f7f9fb', paper: '#ffffff' },
-          text: { primary: '#243b53', secondary: '#66727f' },
-        },
-        sidebar: { width: 170, closedWidth: 54 },
-        shape: { borderRadius: 2 },
-        typography: { fontFamily: 'Inter, "Segoe UI", Arial, sans-serif' },
-      }}
+      theme={adminTheme}
     >
       <Resource name="products" icon={InventoryIcon} {...productResource} recordRepresentation="name" />
       <Resource name="categories" icon={CategoryIcon} {...categoryResource} />
       <Resource name="orders" icon={ShoppingCartIcon} {...orderResource} />
-      <Resource name="users" icon={PeopleIcon} {...userResource} recordRepresentation={(record) => `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.email} />
+      <Resource name="users" icon={PeopleIcon} {...userResource} recordRepresentation={userRecordRepresentation} />
       <CustomRoutes>
         <Route path="/product-images" element={<ProductImageMapping />} />
         <Route path="/image-maintenance" element={<ImageMaintenance />} />
