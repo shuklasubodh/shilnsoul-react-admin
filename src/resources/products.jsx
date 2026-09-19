@@ -78,6 +78,7 @@ const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
     </FormDataConsumer>
     <NumberInput source="price" min={0} validate={required()} />
     <NumberInput source="stock_quantity" min={0} defaultValue={0} /><TextInput source="image_url" type="url" />
+    <BooleanInput source="optimize_for_mobile" label="Optimize product images for mobile (required)" defaultValue validate={(value) => value === true ? undefined : 'Mobile image optimization is required'} />
     <BooleanInput source="is_active" defaultValue />
   </SimpleForm>
 )
