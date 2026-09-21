@@ -8,6 +8,7 @@ import SaveIcon from '@mui/icons-material/Save'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { AuthenticatedBlobImage } from './AuthenticatedBlobImage'
 import { apiUrl } from './apiUrl'
+import { optimizeImageForUpload } from './imageUpload'
 
 const apiFetch = async (path, options = {}) => {
   const response = await fetch(apiUrl(path), {
@@ -78,14 +79,15 @@ export function BannerMaintenance() {
     let blob
     try {
       const token = localStorage.getItem('admin_token')
-      const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(file.name)}`
-      blob = await uploadBlob(`banner/${uniqueName}`, file, {
+      const optimized = await optimizeImageForUpload(file)
+      const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(optimized.file.name)}`
+      blob = await uploadBlob(`banner/${uniqueName}`, optimized.file, {
         access: 'public',
         handleUploadUrl: apiUrl('blob-upload'),
         clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
       })
       await apiFetch('banners', { method: 'POST', body: JSON.stringify({ ...form, blob_url: blob.url, blob_pathname: blob.pathname }) })
-      notify('Banner uploaded and saved.', { type: 'success' })
+      notify(`Banner optimized to WebP and saved (${Math.max(1, Math.round(optimized.optimizedBytes / 1024))} KB).`, { type: 'success' })
       setFile(null)
       setPreviewUrl('')
       setForm({ title: '', alt_text: '', link_url: '', sort_order: banners.length, is_active: true })
@@ -109,8 +111,9 @@ export function BannerMaintenance() {
       setBulkProgress(`Uploading ${index + 1} of ${bulkFiles.length}: ${item.file.name}`)
       let blob
       try {
-        const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(item.file.name)}`
-        blob = await uploadBlob(`banner/${uniqueName}`, item.file, {
+        const optimized = await optimizeImageForUpload(item.file)
+        const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(optimized.file.name)}`
+        blob = await uploadBlob(`banner/${uniqueName}`, optimized.file, {
           access: 'public',
           handleUploadUrl: apiUrl('blob-upload'),
           clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
@@ -191,7 +194,7 @@ export function BannerMaintenance() {
 
   return <Box sx={{ p: 3 }}><Title title="Banner Maintenance" />
     <Typography variant="h4" sx={{ mb: .5 }}>Banner maintenance</Typography>
-    <Typography color="text.secondary" sx={{ mb: 2 }}>Upload public banner images. Files are restricted to the <strong>banner/</strong> Blob folder and stored as separate banner records.</Typography>
+    <Typography color="text.secondary" sx={{ mb: 2 }}>Upload public banner images. Images are resized when needed, converted to WebP, and then stored in the <strong>banner/</strong> Blob folder.</Typography>
     {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
     <Paper variant="outlined" sx={{ p: 2.5, mb: 3 }}>
       <Typography variant="h6" sx={{ mb: 2 }}>Add banner</Typography>

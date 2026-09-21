@@ -6,6 +6,7 @@ import { useNotify, useRefresh } from 'react-admin'
 import { upload as uploadBlob } from '@vercel/blob/client'
 import { useNavigate } from 'react-router-dom'
 import { API_URL } from './apiUrl'
+import { optimizeImageForUpload } from './imageUpload'
 
 const createLimiter = (limit) => {
   let active = 0
@@ -144,7 +145,8 @@ export function BulkUploadButton({ mode }) {
         }
       }
       const blobsByPath = new Map(existingBlobs.map((blob) => [blob.pathname, blob]))
-      const runImageTask = createLimiter(6)
+      // Image conversion is memory intensive, particularly on mobile admin devices.
+      const runImageTask = createLimiter(3)
       let reusedImages = 0
       let uploadedImages = 0
       let unmappedUploadedImages = 0
@@ -158,20 +160,21 @@ export function BulkUploadButton({ mode }) {
           const imageBlobs = (await Promise.all(matchedFiles.map((file, fileIndex) => runImageTask(async () => {
             setUploadProgress(`Checking image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
             try {
-              const pathname = await blobPathFor(product, file)
-              const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, file)
+              const optimized = await optimizeImageForUpload(file)
+              const pathname = await blobPathFor(product, optimized.file)
+              const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, product, optimized.file)
               if (existingBlob) {
                 reusedImages += 1
                 return { url: existingBlob.url, pathname: existingBlob.pathname }
               }
               setUploadProgress(`Uploading new image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
-              const blob = await uploadBlob(pathname, file, {
+              const blob = await uploadBlob(pathname, optimized.file, {
                 access: 'public',
                 handleUploadUrl: `${API_URL}/blob-upload`,
                 clientPayload: JSON.stringify({ adminToken: token }),
               })
               blobsByPath.set(blob.pathname, blob)
-              existingBlobs.push({ ...blob, size: file.size })
+              existingBlobs.push({ ...blob, size: optimized.file.size })
               uploadedImages += 1
               return { url: blob.url, pathname: blob.pathname }
             } catch (error) {
@@ -187,19 +190,20 @@ export function BulkUploadButton({ mode }) {
       await Promise.all(unmappedFiles.map((file, fileIndex) => runImageTask(async () => {
         setUploadProgress(`Uploading unmatched image ${fileIndex + 1} of ${unmappedFiles.length} for manual mapping`)
         try {
-          const pathname = await blobPathFor({ slug: 'unmapped' }, file)
-          const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, { slug: 'unmapped' }, file)
+          const optimized = await optimizeImageForUpload(file)
+          const pathname = await blobPathFor({ slug: 'unmapped' }, optimized.file)
+          const existingBlob = blobsByPath.get(pathname) || legacyBlobFor(existingBlobs, { slug: 'unmapped' }, optimized.file)
           if (existingBlob) {
             unmappedReusedImages += 1
             return
           }
-          const blob = await uploadBlob(pathname, file, {
+          const blob = await uploadBlob(pathname, optimized.file, {
             access: 'public',
             handleUploadUrl: `${API_URL}/blob-upload`,
             clientPayload: JSON.stringify({ adminToken: token }),
           })
           blobsByPath.set(blob.pathname, blob)
-          existingBlobs.push({ ...blob, size: file.size })
+          existingBlobs.push({ ...blob, size: optimized.file.size })
           unmappedUploadedImages += 1
         } catch (error) {
           imageFailures.push({ product: 'Unmapped images', file: file.name, message: error.message })
@@ -253,7 +257,7 @@ export function BulkUploadButton({ mode }) {
           {mode === 'products' ? <Alert severity={imageFiles.length ? 'success' : 'info'} sx={{ mb: 2 }}
             action={<Button startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={uploading}>Select image folder</Button>}
           >{imageFiles.length
-              ? `${imageFiles.length} image files selected. Folder references will be matched during upload; files without a product match will be stored under products/unmapped.`
+              ? `${imageFiles.length} image files selected. Every image will be resized when needed and stored as WebP; files without a product match go under products/unmapped.`
               : preview.products.some((product) => product.image_reference)
                 ? 'Select the common parent folder for the image paths in this workbook.'
                 : 'Optionally select an image folder. Without workbook image references, the images will be stored under products/unmapped for manual mapping.'}</Alert> : null}
