@@ -8,11 +8,20 @@ const fileStem = (name) => String(name || 'image')
 
 const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) => {
   canvas.toBlob(
-    (blob) => blob ? resolve(blob) : reject(new Error('This browser could not create an optimized WebP image.')),
+    (blob) => blob?.type === type
+      ? resolve(blob)
+      : reject(new Error('This browser could not encode this image as WebP. Please use a current Chrome, Edge, Firefox, or Safari browser.')),
     type,
     quality,
   )
 })
+
+const isWebP = async (blob) => {
+  const signature = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
+  return signature.length === 12
+    && String.fromCharCode(...signature.slice(0, 4)) === 'RIFF'
+    && String.fromCharCode(...signature.slice(8, 12)) === 'WEBP'
+}
 
 const loadWithImageElement = (file) => new Promise((resolve, reject) => {
   const url = URL.createObjectURL(file)
@@ -70,6 +79,9 @@ export const optimizeImageForUpload = async (file, options = {}) => {
     if (!context) throw new Error('This browser could not prepare the image for upload.')
     source.draw(context, width, height)
     const blob = await canvasToBlob(canvas, 'image/webp', quality)
+    if (!(await isWebP(blob))) {
+      throw new Error('Image conversion did not produce a valid WebP file, so it was not uploaded.')
+    }
     const optimized = new File([blob], `${fileStem(file.name)}.webp`, {
       type: 'image/webp',
       lastModified: file.lastModified || Date.now(),

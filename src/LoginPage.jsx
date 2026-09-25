@@ -13,11 +13,11 @@ import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import { useLogin } from 'react-admin'
 import artisanHero from './assets/artisan-login-hero.webp'
-import { apiUrl } from './apiUrl'
-import { saveAdminSession } from './session'
 
 export const LoginPage = () => {
+  const login = useLogin()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,15 +29,7 @@ export const LoginPage = () => {
     setError('')
     setLoading(true)
     try {
-      const response = await fetch(apiUrl('auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-      })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload.error || 'Unable to sign in. Please check your credentials.')
-      saveAdminSession(payload)
-      window.location.replace('/')
+      await login({ username: email.trim(), password })
     } catch (loginError) {
       const message = loginError?.message || 'Unable to sign in. Please check your credentials.'
       setError(message)

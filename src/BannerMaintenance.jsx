@@ -83,6 +83,7 @@ export function BannerMaintenance() {
       const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(optimized.file.name)}`
       blob = await uploadBlob(`banner/${uniqueName}`, optimized.file, {
         access: 'public',
+        contentType: 'image/webp',
         handleUploadUrl: apiUrl('blob-upload'),
         clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
       })
@@ -115,6 +116,7 @@ export function BannerMaintenance() {
         const uniqueName = `${Date.now()}-${crypto.randomUUID()}-${safeFileName(optimized.file.name)}`
         blob = await uploadBlob(`banner/${uniqueName}`, optimized.file, {
           access: 'public',
+          contentType: 'image/webp',
           handleUploadUrl: apiUrl('blob-upload'),
           clientPayload: JSON.stringify({ adminToken: token, uploadType: 'banner' }),
         })

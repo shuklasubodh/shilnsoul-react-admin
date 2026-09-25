@@ -37,9 +37,7 @@ const descriptionFor = (row) => {
   const supplied = String(valueFor(row, 'description') ?? '').trim()
   if (supplied) return supplied
   return [
-    valueFor(row, 'place') ? `Origin: ${valueFor(row, 'place')}` : '',
     valueFor(row, 'supplier') ? `Supplier: ${valueFor(row, 'supplier')}` : '',
-    valueFor(row, 'dimension') ? `Dimensions: ${valueFor(row, 'dimension')} inches` : '',
   ].filter(Boolean).join(' · ')
 }
 
@@ -99,6 +97,8 @@ export function transformCatalogRows(sheetRows, fileName, sheetName) {
       sku,
       category_slug: categorySlug,
       description: descriptionFor(row),
+      place: String(valueFor(row, 'place') ?? '').trim(),
+      dimension: String(valueFor(row, 'dimension') ?? '').trim(),
       price,
       stock_quantity: Math.floor(stock),
       image_url: /^https?:\/\//i.test(imageValue) ? imageValue : '',

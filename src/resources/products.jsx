@@ -67,19 +67,25 @@ const ProductEditToolbar = () => {
 
 const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
   <SimpleForm toolbar={toolbar} onSubmit={onSubmit}>
-    <TextInput source="name" validate={required()} /><TextInput source="slug" />
-    <TextInput source="sku" validate={required()} />
-    <ReferenceInput source="category_id" reference="categories"><SelectInput optionText="name" validate={required()} /></ReferenceInput>
-    <TextInput source="description" label="Supplier Name" />
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, columnGap: 2, rowGap: 1, width: '100%', maxWidth: 1200, alignItems: 'start' }}>
+      <TextInput source="name" validate={required()} fullWidth />
+      <TextInput source="slug" fullWidth />
+      <TextInput source="sku" validate={required()} fullWidth />
+      <ReferenceInput source="category_id" reference="categories"><SelectInput optionText="name" validate={required()} fullWidth /></ReferenceInput>
+      <TextInput source="description" label="Supplier Name" fullWidth />
+      <TextInput source="place" label="Place" fullWidth />
+      <TextInput source="dimension" label="Dimension" fullWidth />
+      <NumberInput source="price" min={0} validate={required()} fullWidth />
+      <NumberInput source="stock_quantity" min={0} defaultValue={0} fullWidth />
+      <TextInput source="image_url" type="url" fullWidth />
+      <BooleanInput source="optimize_for_mobile" label="Optimize product images for mobile (required)" defaultValue validate={(value) => value === true ? undefined : 'Mobile image optimization is required'} />
+      <BooleanInput source="is_active" defaultValue />
+    </Box>
     <FormDataConsumer>
       {({ formData }) => (
         <ProductRelatedFields ref={relatedRef} editableColors stockQuantity={formData.stock_quantity} />
       )}
     </FormDataConsumer>
-    <NumberInput source="price" min={0} validate={required()} />
-    <NumberInput source="stock_quantity" min={0} defaultValue={0} /><TextInput source="image_url" type="url" />
-    <BooleanInput source="optimize_for_mobile" label="Optimize product images for mobile (required)" defaultValue validate={(value) => value === true ? undefined : 'Mobile image optimization is required'} />
-    <BooleanInput source="is_active" defaultValue />
   </SimpleForm>
 )
 
@@ -113,7 +119,7 @@ const ProductShow = () => (
     <TextField source="id" /><FunctionField label="Images" render={(record) => <ImageList cols={4} sx={{ maxWidth: 720 }}>
       {(record.images?.length ? record.images : record.image_url ? [record.image_url] : []).map((url) => <ImageListItem key={url}><img src={url} alt={record.name} loading="lazy" /></ImageListItem>)}
     </ImageList>} /><TextField source="name" />
-    <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="description" label="Supplier Name" />
+    <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="description" label="Supplier Name" /><TextField source="place" label="Place" /><TextField source="dimension" label="Dimension" />
     <ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><BooleanField source="is_active" />
   </SimpleShowLayout></Show>
 )

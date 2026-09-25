@@ -14,9 +14,13 @@ export const authProvider = {
     saveAdminSession(payload)
   },
   logout: () => { clearAdminSession(); return Promise.resolve() },
-  checkAuth: () => getAdminToken()
-    ? Promise.resolve()
-    : Promise.reject({ redirectTo: '/login', logoutUser: false }),
+  checkAuth: () => {
+    const token = getAdminToken()
+    const identity = token ? getAdminIdentity() : null
+    if (token && identity?.id) return Promise.resolve()
+    clearAdminSession()
+    return Promise.reject({ redirectTo: '/login', logoutUser: false })
+  },
   checkError: (error) => {
     if (error?.status === 401 || error?.status === 403) {
       clearAdminSession()
@@ -30,5 +34,4 @@ export const authProvider = {
       return identity?.id ? Promise.resolve(identity) : Promise.reject()
     } catch { return Promise.reject() }
   },
-  getPermissions: () => Promise.resolve('ADMIN'),
 }

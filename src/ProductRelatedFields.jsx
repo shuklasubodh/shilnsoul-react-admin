@@ -8,7 +8,6 @@ const listParams = { pagination: { page: 1, perPage: 10000 }, sort: { field: 'id
 const belongsToProduct = (item, product) => String(item.product_id ?? '') === String(product.id)
 const descriptionFields = [
   ['title', 'Title'],
-  ['dimensions', 'Dimensions'],
   ['color_description', 'Color Description'],
   ['pattern_craft', 'Pattern / Craft'],
   ['catalogue_description', 'Catalogue Description'],
@@ -19,6 +18,7 @@ const colorDraft = (record = {}) => ({
   id: record.id,
   key: record.id ? `saved-${record.id}` : `new-${crypto.randomUUID()}`,
   color: String(record.color ?? ''),
+  size: String(record.size ?? ''),
   quantity: Number(record.quantity ?? 0),
 })
 
@@ -89,14 +89,14 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
   }
 
   const saveColors = async () => {
-    const normalized = colors.map((item) => ({ ...item, color: item.color.trim(), quantity: Number(item.quantity) }))
+    const normalized = colors.map((item) => ({ ...item, color: item.color.trim(), size: item.size.trim(), quantity: Number(item.quantity) }))
     if (normalized.some((item) => !item.color || !Number.isInteger(item.quantity) || item.quantity < 0)) {
       setError('Every color requires a name and a non-negative whole-number quantity.')
       return false
     }
-    const names = normalized.map((item) => item.color.toLowerCase())
+    const names = normalized.map((item) => `${item.color.toLowerCase()}|${item.size.toLowerCase()}`)
     if (new Set(names).size !== names.length) {
-      setError('Each color must be unique for this product.')
+      setError('Each color and size combination must be unique for this product.')
       return false
     }
     const productQuantity = Number(stockQuantity ?? product.stock_quantity)
@@ -114,7 +114,7 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
     try {
       const retainedIds = new Set(normalized.filter((item) => item.id).map((item) => String(item.id)))
       await Promise.all(normalized.map((item) => {
-        const data = { product_id: product.id, color: item.color, quantity: item.quantity }
+        const data = { product_id: product.id, color: item.color, size: item.size, quantity: item.quantity }
         const previous = item.id ? savedColors.find((record) => String(record.id) === String(item.id)) : null
         return item.id
           ? dataProvider.update('product-colors', { id: item.id, data: { ...previous, ...data }, previousData: previous })
@@ -154,7 +154,7 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
         <Typography sx={{ whiteSpace: 'pre-wrap', mb: 2 }}>{description.catalogue_description || 'No description found.'}</Typography>
         <Typography variant="subtitle2">Product Colors</Typography>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          {colors.length ? colors.map((item) => <Chip key={item.key} label={`${item.color} (${item.quantity})`} />) : <Typography color="text.secondary">No colors found.</Typography>}
+          {colors.length ? colors.map((item) => <Chip key={item.key} label={`${item.color}${item.size ? ` / ${item.size}` : ''} (${item.quantity})`} />) : <Typography color="text.secondary">No colors found.</Typography>}
         </Stack>
       </Box>
     )
@@ -190,6 +190,7 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
           {colors.map((item, index) => (
             <Stack key={item.key} direction="row" spacing={1} alignItems="center">
               <TextField label="Color" value={item.color} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, color: event.target.value } : row)); setColorsDirty(true) }} fullWidth />
+              <TextField label="Size" value={item.size} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, size: event.target.value } : row)); setColorsDirty(true) }} sx={{ width: 180 }} />
               <TextField label="Quantity" type="number" slotProps={{ htmlInput: { min: 0, step: 1 } }} value={item.quantity} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row)); setColorsDirty(true) }} sx={{ width: 150 }} />
               <IconButton aria-label={`Remove ${item.color || 'color'}`} color="error" onClick={() => { setColors((current) => current.filter((_, rowIndex) => rowIndex !== index)); setColorsDirty(true) }}><DeleteIcon /></IconButton>
             </Stack>

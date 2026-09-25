@@ -170,6 +170,7 @@ export function BulkUploadButton({ mode }) {
               setUploadProgress(`Uploading new image ${fileIndex + 1} of ${matchedFiles.length} for ${product.name} (${productIndex + 1}/${preview.products.length})`)
               const blob = await uploadBlob(pathname, optimized.file, {
                 access: 'public',
+                contentType: 'image/webp',
                 handleUploadUrl: `${API_URL}/blob-upload`,
                 clientPayload: JSON.stringify({ adminToken: token }),
               })
@@ -199,6 +200,7 @@ export function BulkUploadButton({ mode }) {
           }
           const blob = await uploadBlob(pathname, optimized.file, {
             access: 'public',
+            contentType: 'image/webp',
             handleUploadUrl: `${API_URL}/blob-upload`,
             clientPayload: JSON.stringify({ adminToken: token }),
           })
@@ -269,9 +271,9 @@ export function BulkUploadButton({ mode }) {
           {preview.warnings.length ? <Alert severity="warning" sx={{ mb: 2 }}>{preview.warnings.map((item) => `Row ${item.row}: ${item.message}`).join(' | ')}</Alert> : null}
           <Box sx={{ maxHeight: 440, overflow: 'auto' }}>
             <Table size="small" stickyHeader><TableHead><TableRow>
-              <TableCell>Name</TableCell><TableCell>{mode === 'products' ? 'SKU' : 'Slug'}</TableCell>{mode === 'products' ? <><TableCell>Category</TableCell><TableCell align="right">Price</TableCell><TableCell align="right">Stock</TableCell></> : null}
+              <TableCell>Name</TableCell><TableCell>{mode === 'products' ? 'SKU' : 'Slug'}</TableCell>{mode === 'products' ? <><TableCell>Category</TableCell><TableCell>Place</TableCell><TableCell>Dimension</TableCell><TableCell align="right">Price</TableCell><TableCell align="right">Stock</TableCell></> : null}
             </TableRow></TableHead><TableBody>{records.slice(0, 100).map((record) => <TableRow key={mode === 'products' ? record.sku : record.slug}>
-              <TableCell>{record.name}</TableCell><TableCell>{mode === 'products' ? record.sku : record.slug}</TableCell>{mode === 'products' ? <><TableCell>{record.category_slug}</TableCell><TableCell align="right">{record.price.toFixed(2)}</TableCell><TableCell align="right">{record.stock_quantity}</TableCell></> : null}
+              <TableCell>{record.name}</TableCell><TableCell>{mode === 'products' ? record.sku : record.slug}</TableCell>{mode === 'products' ? <><TableCell>{record.category_slug}</TableCell><TableCell>{record.place}</TableCell><TableCell>{record.dimension}</TableCell><TableCell align="right">{record.price.toFixed(2)}</TableCell><TableCell align="right">{record.stock_quantity}</TableCell></> : null}
             </TableRow>)}</TableBody></Table>
           </Box>
           {records.length > 100 ? <Typography variant="caption">Showing the first 100 records.</Typography> : null}
