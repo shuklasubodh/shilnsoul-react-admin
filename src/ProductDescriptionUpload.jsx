@@ -1,19 +1,25 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Title, useDataProvider, useNotify } from 'react-admin'
 import {
-  Alert, Box, Button, LinearProgress, Paper, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, Typography,
+  Alert, Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+  IconButton, LinearProgress, Paper, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ListAltIcon from '@mui/icons-material/ListAlt'
+import AddIcon from '@mui/icons-material/Add'
+import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
+import SearchIcon from '@mui/icons-material/Search'
 import { useNavigate } from 'react-router-dom'
 import readXlsxFile from 'read-excel-file/browser'
 
 const normalizeHeader = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 const codeHeaders = ['product code', 'product code/sku', 'product sku', 'sku', 'code']
 const descriptionHeaders = ['description', 'descriptions', 'product description', 'product descriptions']
-const systemFields = new Set(['id', 'product_id', 'uuid', 'created_at', 'updated_at', 'deleted_at', 'created_by', 'updated_by', 'deleted_by', 'createdat', 'updatedat', 'deletedat'])
+const readOnlyFields = new Set(['id', 'uuid', 'created_at', 'updated_at', 'deleted_at', 'created_by', 'updated_by', 'deleted_by', 'createdat', 'updatedat', 'deletedat'])
+const defaultDescriptionFields = ['product_id', 'title', 'dimensions', 'color_description', 'pattern_craft', 'catalogue_description', 'festive_note']
 
 const fieldName = (header, index) => {
   const normalized = normalizeHeader(header)
@@ -23,7 +29,7 @@ const fieldName = (header, index) => {
 }
 const fieldLabel = (field) => String(field).replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 const visibleRecordFields = (records) => [...new Set(records.flatMap((record) => Object.keys(record || {})))]
-  .filter((field) => !systemFields.has(field) && !['product', 'productCode', 'fields'].includes(field))
+  .filter((field) => !['product', 'productCode', 'fields'].includes(field))
 
 const headerIndex = (headers, aliases) => headers.findIndex((header) =>
   aliases.some((alias) => header === alias || header.includes(alias)),
@@ -82,8 +88,13 @@ export function ProductDescriptionUpload() {
   const [products, setProducts] = useState([])
   const [descriptionRecords, setDescriptionRecords] = useState([])
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [showStored, setShowStored] = useState(false)
+  const [busy, setBusy] = useState(true)
+  const [showStored, setShowStored] = useState(true)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingRecord, setEditingRecord] = useState(null)
+  const [formValues, setFormValues] = useState({})
+  const [deleteRecord, setDeleteRecord] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const productByCode = useMemo(() => new Map(products.map((product) => [String(product.sku).trim().toLowerCase(), product])), [products])
   const effectiveRows = useMemo(() => rows.length
@@ -106,6 +117,19 @@ export function ProductDescriptionUpload() {
   }), [descriptionRecords, productByCode, products])
   const previewFields = useMemo(() => visibleRecordFields(effectiveRows.map((row) => row.fields)), [effectiveRows])
   const storedFields = useMemo(() => visibleRecordFields(descriptionRecords), [descriptionRecords])
+  const editableFields = useMemo(() => {
+    const fields = storedFields.filter((field) => !readOnlyFields.has(field))
+    return fields.length ? fields : defaultDescriptionFields
+  }, [storedFields])
+  const filteredDescriptions = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase()
+    if (!query) return storedDescriptions
+    return storedDescriptions.filter((record) => [
+      ...storedFields.map((field) => record[field]),
+      record.product?.name,
+      record.product?.sku,
+    ].some((value) => String(value ?? '').toLowerCase().includes(query)))
+  }, [searchTerm, storedDescriptions, storedFields])
 
   const loadProducts = async () => {
     const productResult = await dataProvider.getList('products', {
@@ -123,6 +147,23 @@ export function ProductDescriptionUpload() {
     return result.data
   }
 
+  useEffect(() => {
+    let active = true
+    Promise.all([
+      dataProvider.getList('products', { pagination: { page: 1, perPage: 10000 }, sort: { field: 'name', order: 'ASC' }, filter: {} }),
+      dataProvider.getList('product-descriptions', { pagination: { page: 1, perPage: 10000 }, sort: { field: 'id', order: 'DESC' }, filter: {} }),
+    ]).then(([productResult, descriptionResult]) => {
+      if (!active) return
+      setProducts(productResult.data)
+      setDescriptionRecords(descriptionResult.data)
+    }).catch((loadError) => {
+      if (active) setError(loadError.message || 'Uploaded descriptions could not be loaded.')
+    }).finally(() => {
+      if (active) setBusy(false)
+    })
+    return () => { active = false }
+  }, [dataProvider])
+
   const viewStoredDescriptions = async () => {
     if (showStored) {
       setShowStored(false)
@@ -135,6 +176,49 @@ export function ProductDescriptionUpload() {
       setShowStored(true)
     } catch (loadError) {
       setError(loadError.message || 'Uploaded descriptions could not be loaded.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openEditor = (record = null) => {
+    setEditingRecord(record)
+    setFormValues(Object.fromEntries(editableFields.map((field) => [field, record?.[field] ?? ''])))
+    setEditorOpen(true)
+  }
+
+  const saveRecord = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const data = Object.fromEntries(editableFields.map((field) => [field, formValues[field] ?? '']))
+      if (editingRecord) {
+        await dataProvider.update('product-descriptions', { id: editingRecord.id, data: { ...editingRecord, ...data }, previousData: editingRecord })
+        notify('Product description updated.', { type: 'success' })
+      } else {
+        await dataProvider.create('product-descriptions', { data })
+        notify('Product description added.', { type: 'success' })
+      }
+      await loadDescriptionRecords()
+      setEditorOpen(false)
+    } catch (saveError) {
+      setError(saveError.message || 'The product description could not be saved.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteRecord) return
+    setBusy(true)
+    setError('')
+    try {
+      await dataProvider.delete('product-descriptions', { id: deleteRecord.id, previousData: deleteRecord })
+      notify('Product description deleted.', { type: 'success' })
+      await loadDescriptionRecords()
+      setDeleteRecord(null)
+    } catch (deleteError) {
+      setError(deleteError.message || 'The product description could not be deleted.')
     } finally {
       setBusy(false)
     }
@@ -241,21 +325,77 @@ export function ProductDescriptionUpload() {
         </Box>
       </Paper>
       {showStored ? (
-        <Paper sx={{ p: 3, maxWidth: 1100, mt: 3 }}>
-          <Typography variant="h6" gutterBottom>Uploaded Product Descriptions ({storedDescriptions.length})</Typography>
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+            <Typography variant="h6">Uploaded Product Descriptions ({filteredDescriptions.length}{searchTerm ? ` of ${storedDescriptions.length}` : ''})</Typography>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => openEditor()} disabled={busy}>Add record</Button>
+          </Box>
+          <TextField
+            label="Search products"
+            placeholder="Search by product name, SKU, or any field"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            slotProps={{ input: { startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} /> } }}
+            sx={{ width: { xs: '100%', sm: 460 }, mb: 2 }}
+          />
           {storedDescriptions.length ? (
-            <Table size="small">
-              <TableHead><TableRow>{storedFields.map((field) => <TableCell key={field}>{fieldLabel(field)}</TableCell>)}<TableCell>Product</TableCell></TableRow></TableHead>
-              <TableBody>{storedDescriptions.map((record) => (
+            <TableContainer sx={{ overflowX: 'auto' }}><Table size="small">
+              <TableHead><TableRow>{storedFields.map((field) => <TableCell key={field}>{fieldLabel(field)}</TableCell>)}<TableCell>Product</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+              <TableBody>{filteredDescriptions.map((record) => (
                 <TableRow key={record.id}>
-                  {storedFields.map((field) => <TableCell key={field} sx={{ whiteSpace: 'pre-wrap', maxWidth: 650 }}>{String(record[field] ?? '')}</TableCell>)}
+                  {storedFields.map((field) => <TableCell key={field} sx={{ whiteSpace: 'pre-wrap', minWidth: 120, maxWidth: 420 }}>{String(record[field] ?? '')}</TableCell>)}
                   <TableCell>{record.product?.name || '—'}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    <Tooltip title="Edit record"><IconButton aria-label={`Edit ${record.title || record.id}`} onClick={() => openEditor(record)}><EditIcon /></IconButton></Tooltip>
+                    <Tooltip title="Delete record"><IconButton color="error" aria-label={`Delete ${record.title || record.id}`} onClick={() => setDeleteRecord(record)}><DeleteIcon /></IconButton></Tooltip>
+                  </TableCell>
                 </TableRow>
               ))}</TableBody>
-            </Table>
+            </Table></TableContainer>
           ) : <Alert severity="info">No product descriptions have been uploaded yet.</Alert>}
+          {storedDescriptions.length && !filteredDescriptions.length ? <Alert severity="info">No products match “{searchTerm}”.</Alert> : null}
         </Paper>
       ) : null}
+      <Dialog open={editorOpen} onClose={() => !busy && setEditorOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>{editingRecord ? 'Edit product description' : 'Add product description'}</DialogTitle>
+        <DialogContent sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: '16px !important' }}>
+          {editingRecord && storedFields.filter((field) => readOnlyFields.has(field)).map((field) => (
+            <TextField key={field} label={fieldLabel(field)} value={editingRecord[field] ?? ''} disabled />
+          ))}
+          {editableFields.map((field) => field === 'product_id' ? (
+            <Autocomplete
+              key={field}
+              options={products}
+              value={products.find((product) => String(product.id) === String(formValues.product_id)) || null}
+              onChange={(_event, product) => setFormValues((values) => ({ ...values, product_id: product?.id ?? '' }))}
+              getOptionLabel={(product) => `${product.name || 'Unnamed product'}${product.sku ? ` (${product.sku})` : ''}`}
+              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+              renderInput={(params) => <TextField {...params} label="Search product" placeholder="Type a name or SKU" />}
+            />
+          ) : (
+            <TextField
+              key={field}
+              label={fieldLabel(field)}
+              value={formValues[field] ?? ''}
+              onChange={(event) => setFormValues((values) => ({ ...values, [field]: event.target.value }))}
+              multiline={/description|note/i.test(field)}
+              minRows={/description|note/i.test(field) ? 3 : undefined}
+            />
+          ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditorOpen(false)} disabled={busy}>Cancel</Button>
+          <Button variant="contained" onClick={saveRecord} disabled={busy}>{editingRecord ? 'Save changes' : 'Add record'}</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(deleteRecord)} onClose={() => !busy && setDeleteRecord(null)}>
+        <DialogTitle>Delete product description?</DialogTitle>
+        <DialogContent><Typography>This permanently deletes “{deleteRecord?.title || `record ${deleteRecord?.id}`}”.</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteRecord(null)} disabled={busy}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDelete} disabled={busy}>Delete</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
