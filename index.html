@@ -5,7 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>shilpnsoul-react-admin</title>
+
+    <script>
+      window.fbAsyncInit = function () {
+        FB.init({
+          appId: "1212824811020611",
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: "v26.0",
+        });
+      };
+    </script>
+
+    <script
+      async
+      defer
+      crossorigin="anonymous"
+      src="https://connect.facebook.net/en_US/sdk.js"
+    ></script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
