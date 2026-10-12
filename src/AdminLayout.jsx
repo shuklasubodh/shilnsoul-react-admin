@@ -34,6 +34,7 @@ const AdminMenu = () => (
     <MenuItemLink to="/categories" primaryText="Categories" />
     <MenuItemLink to="/orders" primaryText="Orders" />
     <MenuItemLink to="/users" primaryText="Users" />
+    <MenuItemLink to="/whatsapp-setup" primaryText="WhatsApp Setup"/>
   </Menu>
 )
 
