@@ -14,6 +14,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import SearchIcon from '@mui/icons-material/Search'
 import { useNavigate } from 'react-router-dom'
 import readXlsxFile from 'read-excel-file/browser'
+import { unzipSync } from 'fflate'
 
 const normalizeHeader = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
 const codeHeaders = ['product code', 'product code/sku', 'product sku', 'sku', 'code']
@@ -67,13 +68,17 @@ const parseXlsx = async (file) => {
 }
 
 const parseDocx = async (file) => {
-  const mammoth = await import('mammoth')
-  const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() })
-  const document = new DOMParser().parseFromString(result.value, 'text/html')
-  const tableRows = [...document.querySelectorAll('table tr')].map((row) =>
-    [...row.querySelectorAll('th, td')].map((cell) => cell.textContent.trim()),
+  const archive = unzipSync(new Uint8Array(await file.arrayBuffer()), { filter: (entry) => entry.name === 'word/document.xml' })
+  const bytes = archive['word/document.xml']
+  if (!bytes || bytes.length > 20 * 1024 * 1024) throw new Error('The Word document is missing or expands beyond the safe processing limit.')
+  const xml = new TextDecoder().decode(bytes)
+  const decodeXml = (value) => String(value).replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/&#(\d+);/g, (_, number) => String.fromCodePoint(Number(number))).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+  const textFrom = (value) => [...String(value).matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/gi)].map((match) => decodeXml(match[1])).join('')
+  const tableRows = [...xml.matchAll(/<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/gi)].map((row) =>
+    [...row[1].matchAll(/<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/gi)].map((cell) => textFrom(cell[1]).trim()),
   )
-  return { rows: rowsFromGrid(tableRows), text: document.body.textContent.trim() }
+  const text = [...xml.matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/gi)].map((paragraph) => textFrom(paragraph[1]).trim()).filter(Boolean).join('\n')
+  return { rows: rowsFromGrid(tableRows), text }
 }
 
 export function ProductDescriptionUpload() {

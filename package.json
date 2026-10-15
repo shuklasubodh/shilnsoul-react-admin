@@ -13,7 +13,7 @@
     "@vercel/blob": "^2.7.0",
     "heic-to": "^1.5.2",
     "libphonenumber-js": "^1.13.12",
-    "mammoth": "^1.12.1",
+    "fflate": "^0.8.3",
     "ra-data-simple-rest": "^5.15.0",
     "react": "^19.2.8",
     "react-admin": "^5.15.1",

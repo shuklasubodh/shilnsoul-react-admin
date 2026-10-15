@@ -13,7 +13,12 @@ export const authProvider = {
     if (!response.ok) throw new HttpError(payload.error || 'Login failed.', response.status, payload)
     saveAdminSession(payload)
   },
-  logout: () => { clearAdminSession(); return Promise.resolve() },
+  logout: async () => {
+    const token = getAdminToken()
+    try {
+      if (token) await fetch(apiUrl('auth/logout'), { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+    } finally { clearAdminSession() }
+  },
   checkAuth: () => {
     const token = getAdminToken()
     const identity = token ? getAdminIdentity() : null
