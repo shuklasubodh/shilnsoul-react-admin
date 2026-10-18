@@ -3,8 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/src/assets/artisan-login-hero.webp" type="image/webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>shilpnsoul-react-admin</title>
+    <meta name="theme-color" content="#f7f9fb" />
+    <title>Shilp &amp; Soul Admin</title>
+
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      body { background: #f7f9fb; }
+      .app-loading { display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #526474; background: #f7f9fb; font: 14px Inter, "Segoe UI", Arial, sans-serif; }
+      .app-loading-mark { display: grid; width: 50px; height: 50px; color: #fff; border-radius: 14px; background: #258781; box-shadow: 0 10px 25px rgba(37, 135, 129, .22); font: 28px Georgia, "Times New Roman", serif; place-items: center; }
+    </style>
 
     <script>
       window.fbAsyncInit = function () {
@@ -26,7 +35,12 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-loading" role="status" aria-live="polite">
+        <div class="app-loading-mark" aria-hidden="true">S</div>
+        <span>Loading administration console...</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

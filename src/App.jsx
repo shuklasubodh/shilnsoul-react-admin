@@ -35,6 +35,13 @@ const adminTheme = {
 const userRecordRepresentation = (record) =>
   `${record.first_name || ""} ${record.last_name || ""}`.trim() || record.email;
 
+const AppLoading = () => (
+  <div className="app-loading" role="status" aria-live="polite">
+    <div className="app-loading-mark" aria-hidden="true">S</div>
+    <span>Loading administration console...</span>
+  </div>
+);
+
 function App() {
   return (
     <Admin
@@ -42,6 +49,7 @@ function App() {
       dashboard={Dashboard}
       dataProvider={dataProvider}
       layout={AdminLayout}
+      loading={AppLoading}
       loginPage={LoginPage}
       requireAuth
       title="React Admin - Product Management"
