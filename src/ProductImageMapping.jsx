@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Title, useNotify } from 'react-admin'
 import {
   Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Paper,
@@ -29,6 +30,7 @@ const isBlobFile = (blob) => {
 
 export function ProductImageMapping() {
   const notify = useNotify()
+  const [searchParams] = useSearchParams()
   const [products, setProducts] = useState([])
   const [blobs, setBlobs] = useState([])
   const [mappings, setMappings] = useState([])
@@ -41,7 +43,7 @@ export function ProductImageMapping() {
   const [selectedUrls, setSelectedUrls] = useState([])
   const [error, setError] = useState('')
   const [repairing, setRepairing] = useState(false)
-  const [unmappedOnly, setUnmappedOnly] = useState(false)
+  const [unmappedOnly, setUnmappedOnly] = useState(searchParams.get('unmapped') === 'true')
   const [folderFilter, setFolderFilter] = useState('')
   const [productFilter, setProductFilter] = useState('')
   const [pathnameSearch, setPathnameSearch] = useState('')

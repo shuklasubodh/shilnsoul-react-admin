@@ -12,10 +12,11 @@ import DescriptionIcon from '@mui/icons-material/Description'
 import { ScopePanel } from '../Dashboard'
 import { BulkUploadButton } from '../BulkUploadButton'
 import { ProductRelatedFields } from '../ProductRelatedFields'
+import { ProductImageUploadButton } from '../ProductImageUploadButton'
 
 const ProductActions = () => {
   const navigate = useNavigate()
-  return <TopToolbar><Button startIcon={<DescriptionIcon />} onClick={() => navigate('/product-descriptions')}>Upload descriptions</Button><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
+  return <TopToolbar><Button startIcon={<DescriptionIcon />} onClick={() => navigate('/product-descriptions')}>Upload descriptions</Button><ProductImageUploadButton /><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
 }
 const ProductBulkActions = () => <BulkDeleteButton mutationMode="pessimistic" />
 const ProductEmpty = () => (
@@ -23,6 +24,7 @@ const ProductEmpty = () => (
     <Typography variant="h5">No products yet</Typography>
     <Typography color="text.secondary">Upload a spreadsheet or add a product manually.</Typography>
     <Stack direction="row" spacing={1}>
+      <ProductImageUploadButton />
       <BulkUploadButton mode="products" />
       <CreateButton label="Add product" />
     </Stack>
