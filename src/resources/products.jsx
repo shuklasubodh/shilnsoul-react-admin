@@ -14,6 +14,8 @@ import { BulkUploadButton } from '../BulkUploadButton'
 import { ProductRelatedFields } from '../ProductRelatedFields'
 import { ProductImageUploadButton } from '../ProductImageUploadButton'
 
+const LATEST_CHOICES = [{ id: 'T', name: 'Yes' }, { id: 'F', name: 'No' }]
+
 const ProductActions = () => {
   const navigate = useNavigate()
   return <TopToolbar><Button startIcon={<DescriptionIcon />} onClick={() => navigate('/product-descriptions')}>Upload descriptions</Button><ProductImageUploadButton /><BulkUploadButton mode="products" /><CreateButton label="Add product" /></TopToolbar>
@@ -48,6 +50,7 @@ const ProductList = () => (
         <TextField source="sku" label="SKU" /><TextField source="name" /><TextField source="slug" />
         <NumberField source="price" options={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} />
         <NumberField source="stock_quantity" label="Stock" />
+        <FunctionField label="Latest" render={(record) => record.latest === 'T' ? 'Yes' : 'No'} />
         <FunctionField label="Status" render={(record) => record.is_active ? 'Active' : 'Inactive'} />
         <WrapperField label="Actions"><EditButton label="Edit" /><DeleteButton label="Delete" mutationMode="pessimistic" /></WrapperField>
       </Datagrid>
@@ -80,6 +83,7 @@ const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
       <NumberInput source="price" min={0} validate={required()} fullWidth />
       <NumberInput source="stock_quantity" min={0} defaultValue={0} fullWidth />
       <TextInput source="image_url" type="url" fullWidth />
+      <SelectInput source="latest" label="Latest product" choices={LATEST_CHOICES} defaultValue="F" fullWidth />
       <BooleanInput source="optimize_for_mobile" label="Optimize product images for mobile (required)" defaultValue validate={(value) => value === true ? undefined : 'Mobile image optimization is required'} />
       <BooleanInput source="is_active" defaultValue />
     </Box>
@@ -122,7 +126,7 @@ const ProductShow = () => (
       {(record.images?.length ? record.images : record.image_url ? [record.image_url] : []).map((url) => <ImageListItem key={url}><img src={url} alt={record.name} loading="lazy" /></ImageListItem>)}
     </ImageList>} /><TextField source="name" />
     <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="description" label="Supplier Name" /><TextField source="place" label="Place" /><TextField source="dimension" label="Dimension" />
-    <ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><BooleanField source="is_active" />
+    <ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><TextField source="latest" label="Latest" /><BooleanField source="is_active" />
   </SimpleShowLayout></Show>
 )
 

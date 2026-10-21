@@ -11,6 +11,7 @@ const HEADER_ALIASES = {
   place: ['place'],
   supplier: ['supplier'],
   dimension: ['dimention (inch)', 'dimension (inch)', 'dimension'],
+  latest: ['latest', 'new arrival', 'new arrivals'],
 }
 
 const normalizeHeader = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -32,6 +33,8 @@ const numberValue = (value) => {
   const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, ''))
   return Number.isFinite(parsed) ? parsed : null
 }
+
+const latestFlag = (value) => ['t', 'true', '1', 'y', 'yes'].includes(String(value ?? '').trim().toLowerCase()) ? 'T' : 'F'
 
 const descriptionFor = (row) => {
   const supplied = String(valueFor(row, 'description') ?? '').trim()
@@ -104,6 +107,7 @@ export function transformCatalogRows(sheetRows, fileName, sheetName) {
       image_url: /^https?:\/\//i.test(imageValue) ? imageValue : '',
       image_reference: /^https?:\/\//i.test(imageValue) ? '' : imageValue,
       image_urls: /^https?:\/\//i.test(imageValue) ? [imageValue] : [],
+      latest: latestFlag(valueFor(row, 'latest')),
       is_active: true,
       source_row: sourceRow,
     })
