@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Title, useNotify } from 'react-admin'
 import { upload as uploadBlob } from '@vercel/blob/client'
-import { Alert, Box, Button, Checkbox, CircularProgress, LinearProgress, Paper, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, CircularProgress, LinearProgress, MenuItem, Paper, TextField, Typography } from '@mui/material'
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever'
 import SaveIcon from '@mui/icons-material/Save'
@@ -28,18 +28,24 @@ export function BannerMaintenance() {
   const inputRef = useRef(null)
   const folderRef = useRef(null)
   const [banners, setBanners] = useState([])
+  const [origins, setOrigins] = useState([])
   const [file, setFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [bulkFiles, setBulkFiles] = useState([])
   const [bulkProgress, setBulkProgress] = useState('')
-  const [form, setForm] = useState({ title: '', alt_text: '', link_url: '', sort_order: 0, is_active: true })
+  const [form, setForm] = useState({ title: '', alt_text: '', place_of_origin: '', link_url: '', sort_order: 0, is_active: true })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { setBanners(await apiFetch('banners')); setError('') }
+    try {
+      const [bannerRecords, productRecords] = await Promise.all([apiFetch('banners'), apiFetch('products?_start=0&_end=1000')])
+      setBanners(bannerRecords)
+      setOrigins([...new Set(productRecords.map((product) => String(product.place || '').trim()).filter(Boolean))].sort((first, second) => first.localeCompare(second)))
+      setError('')
+    }
     catch (loadError) { setError(loadError.message) }
     finally { setLoading(false) }
   }, [])
@@ -91,7 +97,7 @@ export function BannerMaintenance() {
       notify(`Banner optimized to WebP and saved (${Math.max(1, Math.round(optimized.optimizedBytes / 1024))} KB).`, { type: 'success' })
       setFile(null)
       setPreviewUrl('')
-      setForm({ title: '', alt_text: '', link_url: '', sort_order: banners.length, is_active: true })
+      setForm({ title: '', alt_text: '', place_of_origin: '', link_url: '', sort_order: banners.length, is_active: true })
       if (inputRef.current) inputRef.current.value = ''
       await load()
     } catch (uploadError) {
@@ -125,6 +131,7 @@ export function BannerMaintenance() {
           body: JSON.stringify({
             title: item.name,
             alt_text: item.name,
+            place_of_origin: form.place_of_origin,
             link_url: '',
             sort_order: startingOrder + index,
             is_active: true,
@@ -208,10 +215,11 @@ export function BannerMaintenance() {
         <Box sx={{ display: 'grid', gap: 1.5, alignContent: 'start' }}>
           <TextField label="Title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
           <TextField required label="Image alt text" value={form.alt_text} onChange={(event) => setForm({ ...form, alt_text: event.target.value })} />
+          <TextField select required label="Place of origin" value={form.place_of_origin} onChange={(event) => setForm({ ...form, place_of_origin: event.target.value })}>{origins.map((origin) => <MenuItem value={origin} key={origin}>{origin}</MenuItem>)}</TextField>
           <TextField label="Link URL (optional)" value={form.link_url} onChange={(event) => setForm({ ...form, link_url: event.target.value })} />
           <TextField type="number" label="Display order" value={form.sort_order} inputProps={{ min: 0 }} onChange={(event) => setForm({ ...form, sort_order: event.target.value })} />
           <Box><Checkbox checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} />Active</Box>
-          <Button variant="contained" startIcon={<SaveIcon />} onClick={upload} disabled={!file || !form.alt_text.trim() || saving}>{saving ? 'Uploading…' : 'Upload and save banner'}</Button>
+          <Button variant="contained" startIcon={<SaveIcon />} onClick={upload} disabled={!file || !form.alt_text.trim() || !form.place_of_origin || saving}>{saving ? 'Uploading…' : 'Upload and save banner'}</Button>
         </Box>
       </Box>
     </Paper>
@@ -221,7 +229,8 @@ export function BannerMaintenance() {
       <input ref={folderRef} hidden type="file" accept="image/*" multiple webkitdirectory="" directory="" onChange={(event) => chooseFolder(event.target.files || [])} />
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: bulkFiles.length ? 2 : 0 }}>
         <Button variant="outlined" startIcon={<FolderOpenIcon />} onClick={() => folderRef.current?.click()} disabled={saving}>Select local folder</Button>
-        {bulkFiles.length ? <><Button variant="contained" startIcon={<SaveIcon />} onClick={uploadFolder} disabled={saving}>{saving ? 'Uploading…' : `Upload all (${bulkFiles.length})`}</Button><Button onClick={clearBulkFiles} disabled={saving}>Clear</Button></> : null}
+        <TextField select size="small" required label="Place of origin for uploads" value={form.place_of_origin} onChange={(event) => setForm({ ...form, place_of_origin: event.target.value })} sx={{ minWidth: 220 }}>{origins.map((origin) => <MenuItem value={origin} key={origin}>{origin}</MenuItem>)}</TextField>
+        {bulkFiles.length ? <><Button variant="contained" startIcon={<SaveIcon />} onClick={uploadFolder} disabled={saving || !form.place_of_origin}>{saving ? 'Uploading…' : `Upload all (${bulkFiles.length})`}</Button><Button onClick={clearBulkFiles} disabled={saving}>Clear</Button></> : null}
       </Box>
       {bulkProgress ? <Box sx={{ mb: 2 }}><LinearProgress sx={{ mb: 1 }} /><Typography variant="body2">{bulkProgress}</Typography></Box> : null}
       {bulkFiles.length ? <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1.5 }}>
@@ -243,10 +252,11 @@ export function BannerMaintenance() {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 1.5 }}>
           <TextField size="small" label="Title" value={banner.title} onChange={(event) => changeBanner(banner.id, 'title', event.target.value)} />
           <TextField size="small" label="Image alt text" value={banner.alt_text} onChange={(event) => changeBanner(banner.id, 'alt_text', event.target.value)} />
+          <TextField select required size="small" label="Place of origin" value={banner.place_of_origin || ''} onChange={(event) => changeBanner(banner.id, 'place_of_origin', event.target.value)}>{origins.map((origin) => <MenuItem value={origin} key={origin}>{origin}</MenuItem>)}</TextField>
           <TextField size="small" label="Link URL" value={banner.link_url} onChange={(event) => changeBanner(banner.id, 'link_url', event.target.value)} />
           <TextField size="small" type="number" label="Display order" value={banner.sort_order} inputProps={{ min: 0 }} onChange={(event) => changeBanner(banner.id, 'sort_order', event.target.value)} />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Checkbox checked={banner.is_active} onChange={(event) => changeBanner(banner.id, 'is_active', event.target.checked)} />Active<Typography variant="caption" color="text.secondary" noWrap>{banner.blob_pathname}</Typography></Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button startIcon={<SaveIcon />} onClick={() => updateBanner(banner)} disabled={saving}>Save</Button><Button color="error" startIcon={<DeleteForeverIcon />} onClick={() => removeBanner(banner)} disabled={saving}>Delete</Button></Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}><Button startIcon={<SaveIcon />} onClick={() => updateBanner(banner)} disabled={saving || !banner.place_of_origin}>Save</Button><Button color="error" startIcon={<DeleteForeverIcon />} onClick={() => removeBanner(banner)} disabled={saving}>Delete</Button></Box>
         </Box>
       </Paper>)}
     </Box>}
