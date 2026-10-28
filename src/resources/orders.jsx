@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react'
 import {
-  Button, Create, Datagrid, DateField, Edit, EditButton, List, NumberField, NumberInput,
+  Button, Create, Datagrid, DateField, Edit, EditButton, FunctionField, List, NumberField, NumberInput,
   ReferenceField, ReferenceInput, required, SearchInput, SelectInput, Show,
   SimpleForm, SimpleShowLayout, TextField, TextInput, TopToolbar, useGetMany, useNotify, useRecordContext, useRefresh,
 } from 'react-admin'
@@ -129,10 +129,26 @@ const OrderListActions = () => {
   </TopToolbar>
 }
 
+const OrderCustomer = (props) => {
+  const record = useRecordContext()
+  if (!record) return null
+  if (record.user_id) {
+    return <ReferenceField {...props} source="user_id" reference="users">
+      <FunctionField render={(customer) => [customer?.first_name, customer?.last_name].filter(Boolean).join(' ') || customer?.email || customer?.id} />
+    </ReferenceField>
+  }
+  return <Box>
+    <Typography component="span" fontWeight={600}>Guest checkout</Typography>
+    {record.shipping_name || record.contact_email || record.contact_phone
+      ? <Typography component="span" variant="body2" color="text.secondary"> — {[record.shipping_name, record.contact_email, record.contact_phone].filter(Boolean).join(' · ')}</Typography>
+      : null}
+  </Box>
+}
+
 const OrderList = () => (
   <List actions={<OrderListActions />} filters={[<SearchInput key="search" source="q" alwaysOn />]} sort={{ field: 'created_at', order: 'DESC' }}>
     <Datagrid rowClick="show">
-      <TextField source="id" /><TextField source="order_number" /><ReferenceField source="user_id" reference="users" />
+      <TextField source="id" /><TextField source="order_number" /><OrderCustomer label="Customer" />
       <TextField source="status" /><NumberField source="total_amount" options={{ style: 'currency', currency: 'USD' }} />
       <DateField source="customer_hidden_at" label="Hidden by customer" showTime emptyText="-" />
       <DateField source="archived_at" showTime emptyText="-" /><DateField source="created_at" showTime /><EditButton />
@@ -149,6 +165,17 @@ const OrderForm = () => (
     <SelectInput source="status" choices={statuses} validate={required()} />
     <NumberInput source="total_amount" min={0} validate={required()} />
     <TextInput source="shipping_address" multiline rows={3} /><TextInput source="payment_status" />
+  </SimpleForm>
+)
+
+const OrderEditForm = () => (
+  <SimpleForm>
+    <TextField source="order_number" />
+    <OrderCustomer label="Customer" />
+    <TextField source="payment_status" />
+    <NumberField source="total_amount" options={{ style: 'currency', currency: 'USD' }} />
+    <TextField source="shipping_address" />
+    <SelectInput source="status" choices={statuses} validate={required()} />
   </SimpleForm>
 )
 
@@ -241,7 +268,7 @@ const OrderItems = () => {
 
 const OrderShow = () => (
   <Show><SimpleShowLayout>
-    <TextField source="id" /><TextField source="order_number" /><ReferenceField source="user_id" reference="users" />
+    <TextField source="id" /><TextField source="order_number" /><OrderCustomer label="Customer" />
     <TextField source="status" /><TextField source="payment_status" /><NumberField source="total_amount" />
     <TextField source="shipping_address" /><DateField source="created_at" showTime /><DateField source="updated_at" showTime />
     <OrderItems />
@@ -251,6 +278,6 @@ const OrderShow = () => (
 export const orderResource = {
   list: OrderList,
   create: () => <Create><OrderForm /></Create>,
-  edit: () => <Edit mutationMode="pessimistic"><OrderForm /></Edit>,
+  edit: () => <Edit mutationMode="pessimistic" transform={(data) => ({ status: data.status })}><OrderEditForm /></Edit>,
   show: OrderShow,
 }
