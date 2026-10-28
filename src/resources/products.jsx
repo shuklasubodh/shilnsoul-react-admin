@@ -2,7 +2,7 @@
 import {
   BooleanField, BooleanInput, BulkDeleteButton, Create, CreateButton, Datagrid, DeleteButton, Edit, EditButton, FormDataConsumer, FunctionField,
   List, NumberField, NumberInput, ReferenceField, ReferenceInput, required,
-  SaveButton, SearchInput, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
+  SaveButton, SearchInput, SelectField, SelectInput, Show, SimpleForm, SimpleShowLayout, TextField, TextInput,
   Toolbar, TopToolbar, useDataProvider, useNotify, useRecordContext, WrapperField,
 } from 'react-admin'
 import { useRef } from 'react'
@@ -15,6 +15,12 @@ import { ProductRelatedFields } from '../ProductRelatedFields'
 import { ProductImageUploadButton } from '../ProductImageUploadButton'
 
 const LATEST_CHOICES = [{ id: 'T', name: 'Yes' }, { id: 'F', name: 'No' }]
+const VARIANT_TYPE_CHOICES = [
+  { id: 'NONE', name: 'None' },
+  { id: 'COLOR', name: 'Color' },
+  { id: 'SIZE', name: 'Size' },
+  { id: 'BOTH', name: 'Color and Size' },
+]
 
 const ProductActions = () => {
   const navigate = useNavigate()
@@ -50,6 +56,7 @@ const ProductList = () => (
         <TextField source="sku" label="SKU" /><TextField source="name" /><TextField source="slug" />
         <NumberField source="price" options={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} />
         <NumberField source="stock_quantity" label="Stock" />
+        <SelectField source="variant_type" label="Options" choices={VARIANT_TYPE_CHOICES} />
         <FunctionField label="Latest" render={(record) => record.latest === 'T' ? 'Yes' : 'No'} />
         <FunctionField label="Status" render={(record) => record.is_active ? 'Active' : 'Inactive'} />
         <WrapperField label="Actions"><EditButton label="Edit" /><DeleteButton label="Delete" mutationMode="pessimistic" /></WrapperField>
@@ -84,12 +91,13 @@ const ProductForm = ({ toolbar, relatedRef, onSubmit }) => (
       <NumberInput source="stock_quantity" min={0} defaultValue={0} fullWidth />
       <TextInput source="image_url" type="url" fullWidth />
       <SelectInput source="latest" label="Latest product" choices={LATEST_CHOICES} defaultValue="F" fullWidth />
+      <SelectInput source="variant_type" label="Catalogue options" choices={VARIANT_TYPE_CHOICES} defaultValue="NONE" validate={required()} helperText="Controls whether customers choose color, size, both, or neither." fullWidth />
       <BooleanInput source="optimize_for_mobile" label="Optimize product images for mobile (required)" defaultValue validate={(value) => value === true ? undefined : 'Mobile image optimization is required'} />
       <BooleanInput source="is_active" defaultValue />
     </Box>
     <FormDataConsumer>
       {({ formData }) => (
-        <ProductRelatedFields ref={relatedRef} editableColors stockQuantity={formData.stock_quantity} />
+        <ProductRelatedFields ref={relatedRef} editableColors stockQuantity={formData.stock_quantity} variantType={formData.variant_type || 'NONE'} />
       )}
     </FormDataConsumer>
   </SimpleForm>
@@ -104,13 +112,13 @@ const ProductEditForm = () => {
 
   const saveProductAndRelatedRecords = async (values) => {
     try {
-      await relatedRef.current?.saveAll()
       await dataProvider.update('products', {
         id: record.id,
         data: values,
         previousData: record,
       })
-      notify('Product, description and colors updated.', { type: 'success' })
+      await relatedRef.current?.saveAll()
+      notify('Product, description and variants updated.', { type: 'success' })
       navigate('/products')
     } catch (error) {
       notify(error?.message || 'Product could not be updated.', { type: 'error' })
@@ -126,7 +134,7 @@ const ProductShow = () => (
       {(record.images?.length ? record.images : record.image_url ? [record.image_url] : []).map((url) => <ImageListItem key={url}><img src={url} alt={record.name} loading="lazy" /></ImageListItem>)}
     </ImageList>} /><TextField source="name" />
     <TextField source="slug" /><TextField source="sku" /><ReferenceField source="category_id" reference="categories" /><TextField source="description" label="Supplier Name" /><TextField source="place" label="Place" /><TextField source="dimension" label="Dimension" />
-    <ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><TextField source="latest" label="Latest" /><BooleanField source="is_active" />
+    <SelectField source="variant_type" label="Catalogue options" choices={VARIANT_TYPE_CHOICES} /><ProductRelatedFields /><NumberField source="price" /><NumberField source="stock_quantity" /><TextField source="latest" label="Latest" /><BooleanField source="is_active" />
   </SimpleShowLayout></Show>
 )
 

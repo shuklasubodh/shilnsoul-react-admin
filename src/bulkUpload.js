@@ -12,6 +12,7 @@ const HEADER_ALIASES = {
   supplier: ['supplier'],
   dimension: ['dimention (inch)', 'dimension (inch)', 'dimension'],
   latest: ['latest', 'new arrival', 'new arrivals'],
+  variantType: ['variant type', 'catalogue options', 'product options'],
 }
 
 const normalizeHeader = (value) => String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -35,6 +36,14 @@ const numberValue = (value) => {
 }
 
 const latestFlag = (value) => ['t', 'true', '1', 'y', 'yes'].includes(String(value ?? '').trim().toLowerCase()) ? 'T' : 'F'
+const variantType = (value) => {
+  const normalized = String(value ?? '').trim().toUpperCase().replace(/\s+/g, '_')
+  if (['COLOR', 'COLOUR'].includes(normalized)) return 'COLOR'
+  if (normalized === 'SIZE') return 'SIZE'
+  if (['BOTH', 'COLOR_AND_SIZE', 'COLOUR_AND_SIZE'].includes(normalized)) return 'BOTH'
+  if (normalized === 'NONE') return 'NONE'
+  return undefined
+}
 
 const descriptionFor = (row) => {
   const supplied = String(valueFor(row, 'description') ?? '').trim()
@@ -108,6 +117,7 @@ export function transformCatalogRows(sheetRows, fileName, sheetName) {
       image_reference: /^https?:\/\//i.test(imageValue) ? '' : imageValue,
       image_urls: /^https?:\/\//i.test(imageValue) ? [imageValue] : [],
       latest: latestFlag(valueFor(row, 'latest')),
+      variant_type: variantType(valueFor(row, 'variantType')),
       is_active: true,
       source_row: sourceRow,
     })

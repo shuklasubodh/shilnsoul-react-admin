@@ -22,8 +22,12 @@ const colorDraft = (record = {}) => ({
   quantity: Number(record.quantity ?? 0),
 })
 
-export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ editableColors = false, stockQuantity }, ref) {
+export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ editableColors = false, stockQuantity, variantType }, ref) {
   const product = useRecordContext()
+  const activeVariantType = String(variantType || product?.variant_type || 'NONE').toUpperCase()
+  const usesColor = activeVariantType === 'COLOR' || activeVariantType === 'BOTH'
+  const usesSize = activeVariantType === 'SIZE' || activeVariantType === 'BOTH'
+  const usesVariants = usesColor || usesSize
   const dataProvider = useDataProvider()
   const notify = useNotify()
   const [descriptionRecord, setDescriptionRecord] = useState(null)
@@ -89,9 +93,14 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
   }
 
   const saveColors = async () => {
-    const normalized = colors.map((item) => ({ ...item, color: item.color.trim(), size: item.size.trim(), quantity: Number(item.quantity) }))
-    if (normalized.some((item) => !item.color || !Number.isInteger(item.quantity) || item.quantity < 0)) {
-      setError('Every color requires a name and a non-negative whole-number quantity.')
+    const normalized = usesVariants ? colors.map((item) => ({
+      ...item,
+      color: usesColor ? item.color.trim() : '',
+      size: usesSize ? item.size.trim() : '',
+      quantity: Number(item.quantity),
+    })) : []
+    if (normalized.some((item) => (usesColor && !item.color) || (usesSize && !item.size) || !Number.isInteger(item.quantity) || item.quantity < 0)) {
+      setError(`Every variant requires ${usesColor && usesSize ? 'a color, a size,' : usesColor ? 'a color' : 'a size'} and a non-negative whole-number quantity.`)
       return false
     }
     const names = normalized.map((item) => `${item.color.toLowerCase()}|${item.size.toLowerCase()}`)
@@ -99,14 +108,8 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
       setError('Each color and size combination must be unique for this product.')
       return false
     }
-    const productQuantity = Number(stockQuantity ?? product.stock_quantity)
-    const totalColorQuantity = normalized.reduce((total, item) => total + item.quantity, 0)
-    if (!Number.isFinite(productQuantity) || productQuantity < 0) {
-      setError('Enter a valid product stock quantity before saving colors.')
-      return false
-    }
-    if (totalColorQuantity > productQuantity) {
-      setError(`Total color quantity (${totalColorQuantity}) cannot exceed product stock quantity (${productQuantity}).`)
+    if (!usesVariants && (!Number.isFinite(Number(stockQuantity ?? product.stock_quantity)) || Number(stockQuantity ?? product.stock_quantity) < 0)) {
+      setError('Enter a valid product stock quantity before removing variants.')
       return false
     }
     setSavingColors(true)
@@ -128,7 +131,7 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
       setSavedColors(refreshed)
       setColors(refreshed.map(colorDraft))
       setColorsDirty(false)
-      notify('Product colors updated.', { type: 'success' })
+      notify(usesVariants ? 'Product variants updated.' : 'Product variants removed.', { type: 'success' })
       return true
     } catch (saveError) {
       setError(saveError.message || 'Product colors could not be saved.')
@@ -141,7 +144,7 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
   useImperativeHandle(ref, () => ({
     saveAll: async () => {
       if (descriptionDirty && !await saveDescription()) throw new Error('Product description could not be saved.')
-      if (colorsDirty && !await saveColors()) throw new Error('Product colors could not be saved.')
+      if ((colorsDirty || activeVariantType !== String(product.variant_type || 'NONE').toUpperCase()) && !await saveColors()) throw new Error('Product variants could not be saved.')
     },
   }))
 
@@ -152,9 +155,9 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
       <Box sx={{ width: '100%', maxWidth: 900, my: 1 }}>
         <Typography variant="subtitle2">Product Description</Typography>
         <Typography sx={{ whiteSpace: 'pre-wrap', mb: 2 }}>{description.catalogue_description || 'No description found.'}</Typography>
-        <Typography variant="subtitle2">Product Colors</Typography>
+        <Typography variant="subtitle2">Product Options ({activeVariantType === 'BOTH' ? 'Color and Size' : activeVariantType[0] + activeVariantType.slice(1).toLowerCase()})</Typography>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-          {colors.length ? colors.map((item) => <Chip key={item.key} label={`${item.color}${item.size ? ` / ${item.size}` : ''} (${item.quantity})`} />) : <Typography color="text.secondary">No colors found.</Typography>}
+          {usesVariants && colors.length ? colors.map((item) => <Chip key={item.key} label={`${usesColor ? item.color : ''}${usesColor && usesSize ? ' / ' : ''}${usesSize ? item.size : ''} (${item.quantity})`} />) : <Typography color="text.secondary">No selectable options.</Typography>}
         </Stack>
       </Box>
     )
@@ -184,22 +187,22 @@ export const ProductRelatedFields = forwardRef(function ProductRelatedFields({ e
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2.5 }}>
-        <Typography variant="h6" gutterBottom>Product Colors</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Stored as separate records in the product_color table.</Typography>
+        <Typography variant="h6" gutterBottom>Product Variants</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>{usesVariants ? `Enter each available ${usesColor && usesSize ? 'color and size combination' : usesColor ? 'color' : 'size'} with its inventory quantity. Product stock is synchronized from these rows.` : 'This product has no customer-selectable color or size. Saving removes any old variant rows and uses Product Master stock.'}</Typography>
         <Stack spacing={1.5}>
-          {colors.map((item, index) => (
+          {usesVariants && colors.map((item, index) => (
             <Stack key={item.key} direction="row" spacing={1} alignItems="center">
-              <TextField label="Color" value={item.color} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, color: event.target.value } : row)); setColorsDirty(true) }} fullWidth />
-              <TextField label="Size" value={item.size} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, size: event.target.value } : row)); setColorsDirty(true) }} sx={{ width: 180 }} />
+              {usesColor && <TextField label="Color" value={item.color} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, color: event.target.value } : row)); setColorsDirty(true) }} fullWidth />}
+              {usesSize && <TextField label="Size" value={item.size} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, size: event.target.value } : row)); setColorsDirty(true) }} fullWidth />}
               <TextField label="Quantity" type="number" slotProps={{ htmlInput: { min: 0, step: 1 } }} value={item.quantity} onChange={(event) => { setColors((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row)); setColorsDirty(true) }} sx={{ width: 150 }} />
-              <IconButton aria-label={`Remove ${item.color || 'color'}`} color="error" onClick={() => { setColors((current) => current.filter((_, rowIndex) => rowIndex !== index)); setColorsDirty(true) }}><DeleteIcon /></IconButton>
+              <IconButton aria-label={`Remove ${item.color || item.size || 'variant'}`} color="error" onClick={() => { setColors((current) => current.filter((_, rowIndex) => rowIndex !== index)); setColorsDirty(true) }}><DeleteIcon /></IconButton>
             </Stack>
           ))}
-          {!colors.length ? <Typography color="text.secondary">No colors added.</Typography> : null}
+          {usesVariants && !colors.length ? <Typography color="text.secondary">No variants added.</Typography> : null}
         </Stack>
         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-          <Button startIcon={<AddIcon />} onClick={() => { setColors((current) => [...current, colorDraft()]); setColorsDirty(true) }}>Add Color</Button>
-          <Button variant="contained" onClick={saveColors} disabled={loading || savingColors}>Update Colors</Button>
+          {usesVariants && <Button startIcon={<AddIcon />} onClick={() => { setColors((current) => [...current, colorDraft()]); setColorsDirty(true) }}>Add Variant</Button>}
+          <Button variant="contained" onClick={saveColors} disabled={loading || savingColors}>{usesVariants ? 'Update Variants' : 'Remove Existing Variants'}</Button>
         </Stack>
       </Paper>
       {error ? <Alert severity="error">{error}</Alert> : null}
