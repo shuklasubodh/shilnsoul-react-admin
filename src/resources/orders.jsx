@@ -3,12 +3,16 @@ import { useEffect, useState } from 'react'
 import {
   Button, Create, Datagrid, DateField, Edit, EditButton, List, NumberField, NumberInput,
   ReferenceField, ReferenceInput, required, SearchInput, SelectInput, Show,
-  SimpleForm, SimpleShowLayout, TextField, TextInput, TopToolbar, useNotify, useRefresh,
+  SimpleForm, SimpleShowLayout, TextField, TextInput, TopToolbar, useGetMany, useNotify, useRecordContext, useRefresh,
 } from 'react-admin'
 import ArchiveIcon from '@mui/icons-material/Archive'
 import DownloadIcon from '@mui/icons-material/Download'
-import { Dialog, DialogActions, DialogContent, DialogTitle, TextField as MuiTextField, Typography } from '@mui/material'
+import {
+  Box, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, TextField as MuiTextField, Typography,
+} from '@mui/material'
 import { API_URL, apiUrl } from '../apiUrl'
+import { AuthenticatedBlobImage } from '../AuthenticatedBlobImage'
 import { getAdminToken } from '../session'
 
 const statuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'].map((id) => ({ id, name: id }))
@@ -148,11 +152,99 @@ const OrderForm = () => (
   </SimpleForm>
 )
 
+const firstValue = (...values) => values.find((value) => value !== undefined && value !== null && value !== '')
+
+const itemImageUrl = (item, product) => firstValue(
+  item.image_url,
+  item.product_image_url,
+  item.image?.url,
+  typeof item.image === 'string' ? item.image : undefined,
+  item.product?.image_url,
+  item.product?.images?.[0]?.url,
+  item.product?.images?.[0],
+  item.product?.image_urls?.[0],
+  product?.image_url,
+  product?.images?.[0]?.url,
+  product?.images?.[0],
+)
+
+const itemName = (item, product) => firstValue(item.product_name, item.name, item.title, item.product?.name, product?.name, `Product ${item.product_id || ''}`)
+
+const itemOptions = (item) => [
+  firstValue(item.color, item.color_name, item.product_color?.color_name, item.product_color?.name),
+  firstValue(item.size, item.size_name, item.product_size?.size_name, item.product_size?.name),
+  firstValue(item.variant, item.variant_name),
+].filter(Boolean).join(' · ')
+
+const money = (value, currency = 'USD') => {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) return '—'
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount)
+  } catch {
+    return amount.toFixed(2)
+  }
+}
+
+const OrderItems = () => {
+  const record = useRecordContext()
+  const items = record?.items || record?.order_items || record?.line_items || record?.orderItems || []
+  const currency = record?.currency || 'USD'
+  const productIds = [...new Set(items.map((item) => item.product_id || item.product?.id).filter(Boolean))]
+  const { data: products = [] } = useGetMany('products', { ids: productIds }, { enabled: productIds.length > 0 })
+  const productsById = new Map(products.map((product) => [String(product.id), product]))
+
+  return <Box sx={{ mt: 3 }}>
+    <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>Order items</Typography>
+    {!items.length ? <Typography color="text.secondary">No item details are available for this order.</Typography> :
+      <TableContainer component={Paper} variant="outlined" sx={{ maxWidth: 1100 }}>
+        <Table aria-label="Order items">
+          <TableHead>
+            <TableRow>
+              <TableCell>Image</TableCell>
+              <TableCell>Product</TableCell>
+              <TableCell align="right">Quantity</TableCell>
+              <TableCell align="right">Unit price</TableCell>
+              <TableCell align="right">Total</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {items.map((item, index) => {
+              const product = productsById.get(String(item.product_id || item.product?.id))
+              const quantity = Number(firstValue(item.quantity, item.qty, 1))
+              const unitPrice = Number(firstValue(item.unit_price, item.price, item.product_price))
+              const lineTotal = firstValue(item.total_price, item.line_total, item.subtotal, Number.isFinite(unitPrice) ? unitPrice * quantity : undefined)
+              const imageUrl = itemImageUrl(item, product)
+              const name = itemName(item, product)
+              const options = itemOptions(item)
+
+              return <TableRow key={item.id || item.order_item_id || `${item.product_id || name}-${index}`}>
+                <TableCell sx={{ width: 96 }}>
+                  {imageUrl ? <AuthenticatedBlobImage blobUrl={imageUrl} alt={name} className="order-item-image" /> :
+                    <Box className="order-item-image order-item-image-placeholder">No image</Box>}
+                </TableCell>
+                <TableCell>
+                  <Typography fontWeight={600}>{name}</Typography>
+                  {options ? <Typography variant="body2" color="text.secondary">{options}</Typography> : null}
+                  {item.sku || item.product?.sku || product?.sku ? <Typography variant="caption" color="text.secondary">SKU: {item.sku || item.product?.sku || product.sku}</Typography> : null}
+                </TableCell>
+                <TableCell align="right">{quantity}</TableCell>
+                <TableCell align="right">{money(unitPrice, item.currency || currency)}</TableCell>
+                <TableCell align="right">{money(lineTotal, item.currency || currency)}</TableCell>
+              </TableRow>
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>}
+  </Box>
+}
+
 const OrderShow = () => (
   <Show><SimpleShowLayout>
     <TextField source="id" /><TextField source="order_number" /><ReferenceField source="user_id" reference="users" />
     <TextField source="status" /><TextField source="payment_status" /><NumberField source="total_amount" />
     <TextField source="shipping_address" /><DateField source="created_at" showTime /><DateField source="updated_at" showTime />
+    <OrderItems />
   </SimpleShowLayout></Show>
 )
 

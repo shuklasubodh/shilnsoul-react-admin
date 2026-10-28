@@ -382,6 +382,24 @@ body {
   background: #edf1f4;
 }
 
+.order-item-image {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  color: #72808c;
+  border-radius: 6px;
+  background: #edf1f4;
+  font-size: 11px;
+  object-fit: cover;
+  place-items: center;
+  text-align: center;
+}
+
+.order-item-image-placeholder {
+  padding: 6px;
+  box-sizing: border-box;
+}
+
 .admin-dashboard h1 {
   margin: 0 0 12px;
   color: #183650;
